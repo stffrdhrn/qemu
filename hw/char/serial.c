@@ -97,6 +97,9 @@
 
 #define MAX_XMIT_RETRY      4
 
+//#define DEBUG_SERIAL
+
+
 #ifdef DEBUG_SERIAL
 #define DPRINTF(fmt, ...) \
 do { fprintf(stderr, "serial: " fmt , ## __VA_ARGS__); } while (0)
@@ -143,8 +146,10 @@ static void serial_update_irq(SerialState *s)
 
     if (tmp_iir != UART_IIR_NO_INT) {
         qemu_irq_raise(s->irq);
+        //printf("IRQ Higher\n");
     } else {
         qemu_irq_lower(s->irq);
+        //printf("IRQ Lower\n");
     }
 }
 

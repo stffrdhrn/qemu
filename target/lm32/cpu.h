@@ -199,6 +199,7 @@ struct LM32CPU {
 
     uint32_t revision;
     uint8_t num_interrupts;
+    uint8_t interrupt_type;
     uint8_t num_breakpoints;
     uint8_t num_watchpoints;
     uint32_t features;
