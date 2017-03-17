@@ -218,10 +218,13 @@ static void uart_rx(void *opaque, const uint8_t *buf, int size)
     
 
     //printf("Got uart_rx %d\n", size);
+
+
+
+    s->regs[CSR_UART_EV_PENDING_ADDR] |= UART_EV_RX;
+
     if(s->regs[CSR_UART_EV_ENABLE_ADDR] & UART_EV_RX)
     {
-
-        s->regs[CSR_UART_EV_PENDING_ADDR] |= UART_EV_RX;
         if(!s->irqstate)
         {
             s->irqstate=1;

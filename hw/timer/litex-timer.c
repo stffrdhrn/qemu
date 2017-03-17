@@ -142,18 +142,25 @@ static void timer_write(void *opaque, hwaddr addr, uint64_t value,  unsigned siz
         s->old_en = s->regs[addr];
         s->regs[addr] = value;
 
-        if(!value)
+        if(0 == value)
         {
             ptimer_stop(s->ptimer0);
         } else {
             /* Make sure we were not at 1 before already */
-            if(!s->old_en)
+            if(0 == s->old_en)
             {
                 timval = (s->regs[R_TIMER_LOAD0] << 24) | \
                     (s->regs[R_TIMER_LOAD1] << 16) |      \
                     (s->regs[R_TIMER_LOAD2] << 8) |       \
                     (s->regs[R_TIMER_LOAD3]);
                 ptimer_set_count(s->ptimer0,  timval);
+
+                timval = (s->regs[R_TIMER_RELOAD0] << 24) | \
+                    (s->regs[R_TIMER_RELOAD1] << 16) |      \
+                    (s->regs[R_TIMER_RELOAD2] << 8) |       \
+                    (s->regs[R_TIMER_RELOAD3]);
+                ptimer_set_limit(s->ptimer0,  timval, 1);
+                
                 ptimer_run(s->ptimer0, 0);
             }
         }
@@ -166,10 +173,17 @@ static void timer_write(void *opaque, hwaddr addr, uint64_t value,  unsigned siz
         s->regs[R_TIMER_VALUE3] = timval & 0xff;
         break;
     case R_TIMER_EV_PENDING:
-        if(value)
+        //printf("ev pending %lu\n", value);
+        //if(value)
         {
             qemu_irq_lower(s->timer0_irq);
+            if(s->regs[R_TIMER_EN])
+            {
+                ptimer_run(s->ptimer0, 0);
+            }
+                
         }
+        break;
     case R_TIMER_EV_ENABLE:
         s->regs[addr] = value;
         break;
@@ -193,9 +207,7 @@ static const MemoryRegionOps timer_mmio_ops = {
 static void timer0_hit(void *opaque)
 {
     LitexTimerState *s = opaque;
-    uint32_t timval;
-    
-    //printf("Timer Hit!\n");
+    /* printf("Timer Hit!\n"); */
     ptimer_stop(s->ptimer0);
     
     if(s->regs[R_TIMER_EV_ENABLE])
@@ -203,22 +215,6 @@ static void timer0_hit(void *opaque)
         qemu_irq_raise(s->timer0_irq);
     }
     
-    if(s->regs[R_TIMER_EN])
-    {        
-        timval = (s->regs[R_TIMER_RELOAD0] << 24) | \
-            (s->regs[R_TIMER_RELOAD1] << 16) |      \
-            (s->regs[R_TIMER_RELOAD2] << 8) |       \
-            (s->regs[R_TIMER_RELOAD3]);
-        
-        ptimer_set_count(s->ptimer0,  timval);
-        if(timval)
-            ptimer_run(s->ptimer0, 0);
-        else
-            ptimer_stop(s->ptimer0);
-    } else {
-        
-        ptimer_stop(s->ptimer0);
-    }
 }
 
 

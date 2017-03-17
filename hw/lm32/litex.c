@@ -149,15 +149,19 @@ litex_init(MachineState *machine)
         irq[i] = qdev_get_gpio_in(env->pic_state, i);
     }
 
-
     /* litex uart */
 #ifdef CSR_UART_BASE
-    litex_uart_create(CSR_UART_BASE & 0x7FFFFFFF, irq[0], serial_hds[0]);
+    litex_uart_create(CSR_UART_BASE & 0x7FFFFFFF, irq[UART_INTERRUPT], serial_hds[0]);
 #endif
 
     /* litex timer*/
 #ifdef CSR_TIMER0_BASE
-    litex_timer_create(CSR_TIMER0_BASE & 0x7FFFFFFF, irq[1], 80000000);
+    litex_timer_create(CSR_TIMER0_BASE & 0x7FFFFFFF, irq[TIMER0_INTERRUPT], SYSTEM_CLOCK_FREQUENCY);
+#endif
+
+/* litex ethernet*/
+#ifdef CSR_ETHMAC_BASE
+    litex_liteeth_create(CSR_ETHMAC_BASE & 0x7FFFFFFF, CSR_ETHPHY_BASE & 0x7FFFFFFF, ETHMAC_BASE & 0x7FFFFFFF, irq[ETHMAC_INTERRUPT]);
 #endif
 
     /* make sure juart isn't the first chardev */

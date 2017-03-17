@@ -21,6 +21,8 @@ milkymist_minimac2_raise_irq_rx(void) "Raise IRQ RX"
 milkymist_minimac2_lower_irq_rx(void) "Lower IRQ RX"
 milkymist_minimac2_pulse_irq_tx(void) "Pulse IRQ TX"
 
+
+
 # hw/net/mipsnet.c
 mipsnet_send(uint32_t size) "sending len=%u"
 mipsnet_receive(uint32_t size) "receiving len=%u"
