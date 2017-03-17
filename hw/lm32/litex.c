@@ -80,27 +80,10 @@ litex_init(MachineState *machine)
     LM32CPU *cpu;
     CPULM32State *env;
 
-    int kernel_size;
     MemoryRegion *address_space_mem = get_system_memory();
 
-    MemoryRegion *phys_rom = g_new(MemoryRegion, 1);
-    MemoryRegion *phys_sram = g_new(MemoryRegion, 1);
-    MemoryRegion *phys_main_ram = g_new(MemoryRegion, 1);
-
-
-
-    hwaddr rom_base   = ROM_BASE;
-    hwaddr sram_base   = SRAM_BASE;
-    hwaddr main_ram_base   = MAIN_RAM_BASE;
-    
-    size_t rom_size   = ROM_SIZE;
-    size_t sram_size   = SRAM_SIZE;
-    size_t main_ram_size   = MAIN_RAM_SIZE;
-
-    
     qemu_irq irq[32];
     int i;
-    char *bios_filename;
     ResetInfo *reset_info;
 
     reset_info = g_malloc0(sizeof(ResetInfo));
@@ -120,43 +103,52 @@ litex_init(MachineState *machine)
     /** addresses from 0x80000000 to 0xFFFFFFFF are not shadowed */
     cpu_lm32_set_phys_msb_ignore(env, 1);
 
-    memory_region_allocate_system_memory(phys_rom, NULL, "litex.rom", rom_size);
-    memory_region_add_subregion(address_space_mem, rom_base, phys_rom);
+#ifdef ROM_BASE
+    {
+	    MemoryRegion *phys_rom = g_new(MemoryRegion, 1);
+	    hwaddr rom_base   = ROM_BASE;
+	    size_t rom_size   = ROM_SIZE;
+	    memory_region_allocate_system_memory(phys_rom, NULL, "litex.rom", rom_size);
+	    memory_region_add_subregion(address_space_mem, rom_base, phys_rom);
+    }
+#endif
 
-    memory_region_allocate_system_memory(phys_sram, NULL, "litex.sram",    sram_size);
-    memory_region_add_subregion(address_space_mem, sram_base, phys_sram);
+#ifdef SRAM_BASE
+    {
+	    MemoryRegion *phys_sram = g_new(MemoryRegion, 1);
+	    hwaddr sram_base   = SRAM_BASE;
+	    size_t sram_size   = SRAM_SIZE;
+	    memory_region_allocate_system_memory(phys_sram, NULL, "litex.sram",    sram_size);
+	    memory_region_add_subregion(address_space_mem, sram_base, phys_sram);
+    }
+#endif
 
-    memory_region_allocate_system_memory(phys_main_ram, NULL, "litex.main_ram", main_ram_size);
-    memory_region_add_subregion(address_space_mem, main_ram_base, phys_main_ram);
+#ifdef SPIFLASH_BASE
+    {
+	    MemoryRegion *phys_spiflash = g_new(MemoryRegion, 1);
+	    hwaddr spiflash_base = SPIFLASH_BASE;
+	    size_t spiflash_size = SPIFLASH_SIZE;
+	    memory_region_allocate_system_memory(phys_spiflash, NULL, "litex.spiflash", spiflash_size);
+	    memory_region_add_subregion(address_space_mem, spiflash_base, phys_spiflash);
+    }
+#endif
 
-    
+#ifdef MAIN_RAM_BASE
+    {
+	    MemoryRegion *phys_main_ram = g_new(MemoryRegion, 1);
+	    hwaddr main_ram_base   = MAIN_RAM_BASE;
+	    size_t main_ram_size   = MAIN_RAM_SIZE;
+	    memory_region_allocate_system_memory(phys_main_ram, NULL, "litex.main_ram", main_ram_size);
+	    memory_region_add_subregion(address_space_mem, main_ram_base, phys_main_ram);
+    }
+#endif
+
     /* create irq lines */
     env->pic_state = litex_pic_init(qemu_allocate_irq(cpu_irq_handler, cpu, 0));
     for (i = 0; i < 32; i++) {
         irq[i] = qdev_get_gpio_in(env->pic_state, i);
     }
 
-    /* load bios rom */
-    if (bios_name == NULL) {
-        bios_name = BIOS_FILENAME;
-    }
-    bios_filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, bios_name);
-
-    if (bios_filename) {
-        load_image_targphys(bios_filename, ROM_BASE, ROM_SIZE);
-    }
-    reset_info->bootstrap_pc = ROM_BASE;
-
-
-    /* if no kernel is given no valid bios rom is a fatal error */
-    if (!kernel_filename  && !bios_filename && !qtest_enabled()) {
-        fprintf(stderr, "qemu: could not load Milkymist One bios '%s'\n",
-                bios_name);
-        exit(1);
-    }
-    g_free(bios_filename);
-
-   
 
     /* litex uart */
 #ifdef CSR_UART_BASE
@@ -167,35 +159,65 @@ litex_init(MachineState *machine)
 #ifdef CSR_TIMER0_BASE
     litex_timer_create(CSR_TIMER0_BASE & 0x7FFFFFFF, irq[1], 80000000);
 #endif
-    
-    /* INIT UART 16550 */
-#ifndef CSR_UART_BASE
- #ifdef CSR_UART16550_BASE
-    serial_mm_init(address_space_mem, CSR_UART16550_BASE & 0x7FFFFFFF, 2, irq[0],   115200, serial_hds[0], DEVICE_NATIVE_ENDIAN); */
- #endif
-#endif
-        
+
     /* make sure juart isn't the first chardev */
     env->juart_state = lm32_juart_init(serial_hds[1]);
 
-    if (kernel_filename) {
-        uint64_t entry;
 
-        /* Boots a kernel elf binary.  */
-        kernel_size = load_elf(kernel_filename, NULL, NULL, &entry, NULL, NULL, 1, EM_LATTICEMICO32, 0, 0);
-        reset_info->bootstrap_pc = entry;
+#ifdef ROM_BASE
+#ifndef ROM_DISABLE
+    /* load bios rom */
+    char *bios_filename;
+    if (bios_name == NULL) {
+        bios_name = BIOS_FILENAME;
+    }
+    bios_filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, bios_name);
 
-        if (kernel_size < 0) {
-            kernel_size = load_image_targphys(kernel_filename, main_ram_base,   main_ram_size);
-            reset_info->bootstrap_pc = main_ram_base;
+    if (bios_filename) {
+        int bios_size = load_image_targphys(bios_filename, ROM_BASE, ROM_SIZE);
+        if (bios_size < 0) {
+            fprintf(stderr, "qemu: could not load bios '%s'\n", bios_filename);
+            exit(1);
         }
+    }
+    g_free(bios_filename);
+#endif
+#endif
 
+//    /* if no kernel is given no valid bios rom is a fatal error */
+//    if (!kernel_filename  && !bios_filename && !qtest_enabled()) {
+//        fprintf(stderr, "qemu: could not load Milkymist One bios '%s'\n",
+//                bios_name);
+//        exit(1);
+//    }
+
+    if (kernel_filename) {
+        int kernel_size = load_image_targphys(kernel_filename, SPIFLASH_BASE, SPIFLASH_SIZE);
         if (kernel_size < 0) {
             fprintf(stderr, "qemu: could not load kernel '%s'\n",    kernel_filename);
             exit(1);
         }
     }
 
+//        uint64_t entry;
+//        int kernel_size;
+//
+//        /* Boots a kernel elf binary.  */
+//        kernel_size = load_elf(kernel_filename, NULL, NULL, &entry, NULL, NULL, 1, EM_LATTICEMICO32, 0, 0);
+//        reset_info->bootstrap_pc = entry;
+//
+//        if (kernel_size < 0) {
+//            kernel_size = load_image_targphys(kernel_filename, main_ram_base, main_ram_size);
+//            reset_info->bootstrap_pc = main_ram_base;
+//        }
+//
+//        if (kernel_size < 0) {
+//            fprintf(stderr, "qemu: could not load kernel '%s'\n",    kernel_filename);
+//            exit(1);
+//        }
+//    }
+
+    reset_info->bootstrap_pc = CONFIG_CPU_RESET_ADDR;
     qemu_register_reset(main_cpu_reset, reset_info);
 }
 
