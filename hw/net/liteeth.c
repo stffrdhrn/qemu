@@ -95,7 +95,7 @@ static uint64_t liteeth_phy_reg_read(void *opaque, hwaddr addr, unsigned size)
 {
     LiteethState *s = opaque;
 
-    printf("Reading PHY REG \n");
+    //printf("Reading PHY REG \n");
     addr >>= 2;
     uint64_t r = s->phy_regs[addr];
     return r;
@@ -106,7 +106,7 @@ static void liteeth_phy_reg_write(void *opaque, hwaddr addr, uint64_t value,  un
     LiteethState *s = opaque;
     addr >>= 2;
 
-    printf("Writing value %08x on PHY REG %08x\n", (unsigned int)value, (unsigned int)addr);
+    //printf("Writing value %08x on PHY REG %08x\n", (unsigned int)value, (unsigned int)addr);
     s->phy_regs[addr] = value;
     /* nop */
 }
