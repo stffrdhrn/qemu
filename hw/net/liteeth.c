@@ -29,26 +29,26 @@
 #include "net/net.h"
 #include "qemu/error-report.h"
 
-#define LITEETH_BUFFER_SIZE 0x800 
+#define LITEETH_BUFFER_SIZE 0x800
 
 enum {
     R_ETHMAC_SRAM_WRITER_SLOT,
-    R_ETHMAC_SRAM_WRITER_LENGTH0, 
-    R_ETHMAC_SRAM_WRITER_LENGTH1, 
-    R_ETHMAC_SRAM_WRITER_LENGTH2, 
-    R_ETHMAC_SRAM_WRITER_LENGTH3, 
-    R_ETHMAC_SRAM_WRITER_EV_STATUS, 
+    R_ETHMAC_SRAM_WRITER_LENGTH0,
+    R_ETHMAC_SRAM_WRITER_LENGTH1,
+    R_ETHMAC_SRAM_WRITER_LENGTH2,
+    R_ETHMAC_SRAM_WRITER_LENGTH3,
+    R_ETHMAC_SRAM_WRITER_EV_STATUS,
     R_ETHMAC_SRAM_WRITER_EV_PENDING,
     R_ETHMAC_SRAM_WRITER_EV_ENABLE,
     R_ETHMAC_SRAM_READER_START,
     R_ETHMAC_SRAM_READER_READY,
-    R_ETHMAC_SRAM_READER_SLOT, 
-    R_ETHMAC_SRAM_READER_LENGTH0, 
-    R_ETHMAC_SRAM_READER_LENGTH1, 
-    R_ETHMAC_SRAM_READER_EV_STATUS, 
+    R_ETHMAC_SRAM_READER_SLOT,
+    R_ETHMAC_SRAM_READER_LENGTH0,
+    R_ETHMAC_SRAM_READER_LENGTH1,
+    R_ETHMAC_SRAM_READER_EV_STATUS,
     R_ETHMAC_SRAM_READER_EV_PENDING,
     R_ETHMAC_SRAM_READER_EV_ENABLE,
-    R_ETHMAC_PREAMBLE_CRC,    
+    R_ETHMAC_PREAMBLE_CRC,
     R_MAX,
 };
 
@@ -117,7 +117,7 @@ static ssize_t liteeth_rx(NetClientState *nc, const uint8_t *buf, size_t size)
     LiteethState *s = qemu_get_nic_opaque(nc);
     //int i;
     size_t tmpsize;
-    
+
     //printf("\n[QEMU] ethernet rx %lu\n", size);
     /*for (i = 0; i < size; i++)
     {
@@ -127,7 +127,7 @@ static ssize_t liteeth_rx(NetClientState *nc, const uint8_t *buf, size_t size)
     */
     if(s->regs[R_ETHMAC_SRAM_WRITER_EV_PENDING])
         return 0;
-    
+
     if(s->rx_buf == s->rx0_buf)
     {
         s->rx_buf = s->rx1_buf;
@@ -138,7 +138,7 @@ static ssize_t liteeth_rx(NetClientState *nc, const uint8_t *buf, size_t size)
     }
 
     memset(s->rx_buf, 0, LITEETH_BUFFER_SIZE);
-    
+
     if(size < LITEETH_BUFFER_SIZE)
     {
         memcpy(s->rx_buf, buf, size);
@@ -163,10 +163,10 @@ static ssize_t liteeth_rx(NetClientState *nc, const uint8_t *buf, size_t size)
                 qemu_irq_raise(s->irq);
                 s->irq_state = 1;
             }
-            
+
         }
 
-    
+
     return size;
 }
 
@@ -219,11 +219,11 @@ static void liteeth_reg_write(void *opaque, hwaddr addr, uint64_t value,  unsign
         }
         break;
     case R_ETHMAC_SRAM_READER_START:
-   
+
         len = (s->regs[R_ETHMAC_SRAM_READER_LENGTH0] << 8) |    \
           (s->regs[R_ETHMAC_SRAM_READER_LENGTH1]  & 0xff);
         //printf("[QEMU] len = %d\n", len);
-        qemu_send_packet_raw(qemu_get_queue(s->nic), s->tx_buf, len);        
+        qemu_send_packet_raw(qemu_get_queue(s->nic), s->tx_buf, len);
 
         s->regs[R_ETHMAC_SRAM_READER_EV_PENDING] = 1;
 
@@ -236,7 +236,7 @@ static void liteeth_reg_write(void *opaque, hwaddr addr, uint64_t value,  unsign
           }
         }
         break;
-        
+
     case R_ETHMAC_SRAM_READER_EV_PENDING:
     case R_ETHMAC_SRAM_WRITER_EV_PENDING:
         s->regs[addr] = 0;
@@ -244,13 +244,13 @@ static void liteeth_reg_write(void *opaque, hwaddr addr, uint64_t value,  unsign
         {
             qemu_flush_queued_packets(qemu_get_queue(s->nic));
         }
-        
+
         if(s->regs[R_ETHMAC_SRAM_WRITER_EV_ENABLE])
         {
           if(s->regs[R_ETHMAC_SRAM_WRITER_EV_PENDING])
             break;
         }
-        
+
         if(s->regs[R_ETHMAC_SRAM_READER_EV_ENABLE])
         {
           if(s->regs[R_ETHMAC_SRAM_READER_EV_PENDING])
@@ -262,7 +262,7 @@ static void liteeth_reg_write(void *opaque, hwaddr addr, uint64_t value,  unsign
           s->irq_state = 0;
         }
         break;
-        
+
     case R_ETHMAC_SRAM_READER_EV_ENABLE:
       if(s->regs[R_ETHMAC_SRAM_READER_EV_PENDING])
         if(!s->irq_state)
@@ -271,7 +271,7 @@ static void liteeth_reg_write(void *opaque, hwaddr addr, uint64_t value,  unsign
           s->irq_state = 1;
         }
       break;
-      
+
     case R_ETHMAC_SRAM_WRITER_EV_ENABLE:
       if(s->regs[R_ETHMAC_SRAM_WRITER_EV_PENDING])
         if(!s->irq_state)
@@ -281,10 +281,10 @@ static void liteeth_reg_write(void *opaque, hwaddr addr, uint64_t value,  unsign
         }
       break;
     default:
-      
+
         break;
     }
- 
+
 };
 
 
@@ -292,9 +292,9 @@ static void liteeth_reset(DeviceState *d)
 {
     LiteethState *s = LITEETH(d);
     int i;
-    
+
     s->irq_state = 0;
-    
+
     for (i = 0; i < R_MAX; i++) {
         s->regs[i] = 0;
     }
@@ -341,7 +341,7 @@ static int liteeth_init(SysBusDevice *sbd)
 
     memory_region_init_io(&s->phy_regs_region, OBJECT(dev), &liteeth_phy_ops, s, "liteeth_phy_regs", R_PHY_MAX * 4);
     sysbus_init_mmio(sbd, &s->phy_regs_region);
-    
+
     memory_region_init_io(&s->regs_region, OBJECT(dev), &liteeth_reg_ops, s, "liteeth_regs", R_MAX * 4);
     sysbus_init_mmio(sbd, &s->regs_region);
 
@@ -357,12 +357,12 @@ static int liteeth_init(SysBusDevice *sbd)
     s->tx_buf = s->tx1_buf;
     s->rx_buf = s->rx1_buf;
     s->irq_state = 0;
-    
+
     memset(s->rx0_buf, 'a', LITEETH_BUFFER_SIZE);
     memset(s->rx1_buf, 'b', LITEETH_BUFFER_SIZE);
     memset(s->tx0_buf, 'c', LITEETH_BUFFER_SIZE);
     memset(s->tx1_buf, 'd', LITEETH_BUFFER_SIZE);
-    
+
     sysbus_init_mmio(sbd, &s->buffers);
 
     qemu_macaddr_default_if_unset(&s->conf.macaddr);
