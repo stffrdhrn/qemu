@@ -127,7 +127,7 @@ struct LiteEthState {
     uint16_t phy_regs[R_PHY_MAX];
 
     LiteEthMdioBBState mdio_bb;
-    MDIO *mdio;
+    struct MDIOBus *mdio_bus;
 
     uint8_t *tx0_buf;
     uint8_t *tx1_buf;
@@ -144,26 +144,9 @@ typedef struct LiteEthState LiteEthState;
     OBJECT_CHECK(LiteEthState, (obj), TYPE_LITEETH)
 
 
-static void liteeth_mdio_write_reg(LiteEthMdioBBState *m,
-        uint8_t phy_addr, uint8_t reg_addr, uint16_t value)
-{
-
-    //trace_liteeth_mdio_write(phy_addr, reg_addr, value);
-    /* nop */
-    //m->regs[reg_addr] = value;
-}
-
-static uint16_t liteeth_mdio_read_reg(LiteEthMdioBBState *m,
-        uint8_t phy_addr, uint8_t reg_addr)
-{
-    uint16_t r = m->regs[reg_addr];
-    //trace_liteeth_mdio_read(phy_addr, reg_addr, r);
-    return r;
-}
-
 static void liteeth_update_mdio_bb(LiteEthState *s, uint16_t phy_mdio_write_reg_value, uint16_t *phy_mdio_read_reg)
 {
-    LiteEthMdioBBState* m = s->mdio_bb;
+    LiteEthMdioBBState* m = &(s->mdio_bb);
 
     /* detect rising clk edge */
     if (m->last_clk == 0 && (phy_mdio_write_reg_value & MDIO_CLK)) {
@@ -206,8 +189,8 @@ static void liteeth_update_mdio_bb(LiteEthState *s, uint16_t phy_mdio_write_reg_
             }
 
             if (m->state == MDIO_STATE_READING) {
-                if (s->mdio) {
-                    m->data_out = s->mdio->read(s->mdio, m->phy_addr, m->reg_addr);
+                if (s->mdio_bus) {
+                    m->data_out = mdio_recv(s->mdio_bus, m->phy_addr, m->reg_addr);
                 } else {
                     m->data_out = 0;
                 }
@@ -231,8 +214,8 @@ static void liteeth_update_mdio_bb(LiteEthState *s, uint16_t phy_mdio_write_reg_
                 uint16_t data = m->data & 0xffff;
 
                 printf("Writing value %08x to MDIO PHY %08x REG %08x\n", (unsigned int)(data), (unsigned int)(m->phy_addr), (unsigned int)(m->reg_addr));
-                if (s->mdio) {
-                    s->mdio->write(s->mdio, m->phy_addr, m->reg_addr, data);
+                if (s->mdio_bus) {
+                    mdio_send(s->mdio_bus, m->phy_addr, m->reg_addr, data);
                 }
             }
             m->state = MDIO_STATE_IDLE;
@@ -454,15 +437,6 @@ static void liteeth_reset(DeviceState *d)
     for (i = 0; i < R_PHY_MAX; i++) {
         s->phy_regs[i] = 0;
     }
-
-    /* mdio state */
-    s->mdio_bb.state = MDIO_STATE_IDLE;
-    for (i = 0; i < R_MDIO_MAX; i++) {
-        s->mdio_bb.regs[i] = 1 << (i % 16);
-    }
-
-    s->mdio_bb.regs[R_MDIO_ID1] = 0x0022; /* Micrel KSZ8001L */
-    s->mdio_bb.regs[R_MDIO_ID2] = 0x161a;
 }
 
 static NetClientInfo net_liteeth_info = {
@@ -503,15 +477,12 @@ static int liteeth_init(SysBusDevice *sbd)
 
     memory_region_init_io(&s->phy_regs_region, OBJECT(dev), &liteeth_phy_ops, s, "liteeth_phy_regs", R_PHY_MAX * 4);
     sysbus_init_mmio(sbd, &s->phy_regs_region);
-    object_property_add_link(obj, "mdio", TYPE_MDIO, (Object **)&s->mdio,
-                             qdev_prop_allow_set_link,
-                             OBJ_PROP_LINK_UNREF_ON_RELEASE,
-                             &error_abort);
 
     memory_region_init_io(&s->regs_region, OBJECT(dev), &liteeth_reg_ops, s, "liteeth_regs", R_MAX * 4);
     sysbus_init_mmio(sbd, &s->regs_region);
 
-
+    s->mdio_bus = mdio_init_bus(dev, "mdio-bus");
+    mdio_create_slave(s->mdio_bus, "88e1116r", 0x0);
 
     /* register buffers memory */
     memory_region_init_ram(&s->buffers, OBJECT(dev), "liteeth.buffers", buffers_size, &error_fatal);
@@ -541,7 +512,7 @@ static int liteeth_init(SysBusDevice *sbd)
 
 
 static const VMStateDescription vmstate_liteeth_mdio_bb = {
-    .name = "liteeth-mdio_bb",
+    .name = "liteeth-mdio-bb",
     .version_id = 1,
     .minimum_version_id = 1,
     .fields = (VMStateField[]) {

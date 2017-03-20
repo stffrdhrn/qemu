@@ -26,7 +26,7 @@
  */
 
 #include "qemu/osdep.h"
-#include "hw/mdio/mdio_slave.h"
+#include "hw/mdio/mdio.h"
 #include "hw/mdio/eth_phy.h"
 #include "qemu/log.h"
 

@@ -26,8 +26,7 @@
  */
 
 #include "qemu/osdep.h"
-#include "hw/mdio/mdio_slave.h"
-#include "hw/fdt_generic_util.h"
+#include "hw/mdio/mdio.h"
 
 struct MDIOBus *mdio_init_bus(DeviceState *parent, const char *name)
 {
@@ -37,12 +36,22 @@ struct MDIOBus *mdio_init_bus(DeviceState *parent, const char *name)
     return bus;
 }
 
-void mdio_set_slave_addr(MDIOSlave *s, uint8_t addr)
+void mdio_set_slave_address(MDIOSlave *dev, uint8_t address)
 {
-    s->addr = addr;
+    dev->address = address;
 }
 
-static MDIOSlave *mdio_find_slave(struct MDIOBus *bus, uint8_t addr)
+DeviceState *mdio_create_slave(struct MDIOBus *bus, const char *name, uint8_t address)
+{
+    DeviceState *dev;
+
+    dev = qdev_create(&bus->qbus, name);
+    qdev_prop_set_uint8(dev, "address", address);
+    qdev_init_nofail(dev);
+    return dev;
+}
+
+static MDIOSlave *mdio_find_slave(struct MDIOBus *bus, uint8_t address)
 {
     MDIOSlave *slave = NULL;
     BusChild *kid;
@@ -50,7 +59,7 @@ static MDIOSlave *mdio_find_slave(struct MDIOBus *bus, uint8_t addr)
     QTAILQ_FOREACH(kid, &bus->qbus.children, sibling) {
         DeviceState *qdev = kid->child;
         MDIOSlave *candidate = MDIO_SLAVE(qdev);
-        if (addr == candidate->addr) {
+        if (address == candidate->address) {
             slave = candidate;
             break;
         }
@@ -58,16 +67,16 @@ static MDIOSlave *mdio_find_slave(struct MDIOBus *bus, uint8_t addr)
     return slave;
 }
 
-int mdio_send(struct MDIOBus *bus, uint8_t addr, uint8_t reg, uint8_t data)
+int mdio_send(struct MDIOBus *bus, uint8_t address, uint8_t reg, uint8_t data)
 {
     MDIOSlave *slave = NULL;
     MDIOSlaveClass *sc;
 
-    if ((bus->cur_addr != addr) || !bus->cur_slave) {
-        slave = mdio_find_slave(bus, addr);
+    if ((bus->cur_addr != address) || !bus->cur_slave) {
+        slave = mdio_find_slave(bus, address);
         if (slave) {
             bus->cur_slave = slave;
-            bus->cur_addr = addr;
+            bus->cur_addr = address;
         } else {
             return -1;
         }
@@ -82,16 +91,16 @@ int mdio_send(struct MDIOBus *bus, uint8_t addr, uint8_t reg, uint8_t data)
     return -1;
 }
 
-int mdio_recv(struct MDIOBus *bus, uint8_t addr, uint8_t reg)
+int mdio_recv(struct MDIOBus *bus, uint8_t address, uint8_t reg)
 {
     MDIOSlave *slave = NULL;
     MDIOSlaveClass *sc;
 
-    if ((bus->cur_addr != addr) || !bus->cur_slave) {
-        slave = mdio_find_slave(bus, addr);
+    if ((bus->cur_addr != address) || !bus->cur_slave) {
+        slave = mdio_find_slave(bus, address);
         if (slave) {
             bus->cur_slave = slave;
-            bus->cur_addr = addr;
+            bus->cur_addr = address;
         } else {
             return -1;
         }
@@ -107,50 +116,26 @@ int mdio_recv(struct MDIOBus *bus, uint8_t addr, uint8_t reg)
 }
 
 static Property mdio_props[] = {
-    DEFINE_PROP_UINT8("reg", MDIOSlave, addr, 0),
+    DEFINE_PROP_UINT8("address", struct MDIOSlave, address, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
-
-static bool mdio_slave_parse_reg(FDTGenericMMap *obj, FDTGenericRegPropInfo reg,
-                                Error **errp)
-{
-    DeviceState *parent;
-
-    parent = (DeviceState *)object_dynamic_cast(reg.parents[0], TYPE_DEVICE);
-
-    if (!parent) {
-        return false;
-    }
-
-    if (!parent->realized) {
-        return true;
-    }
-
-    qdev_set_parent_bus(DEVICE(obj), qdev_get_child_bus(parent, "mdio-bus"));
-
-    return false;
-}
 
 static void mdio_slave_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *k = DEVICE_CLASS(klass);
-    FDTGenericMMapClass *fmc = FDT_GENERIC_MMAP_CLASS(klass);
 
     set_bit(DEVICE_CATEGORY_MISC, k->categories);
     k->bus_type = TYPE_MDIO_BUS;
     k->props = mdio_props;
-    fmc->parse_reg = mdio_slave_parse_reg;
 }
 
 static const TypeInfo mdio_slave_info = {
     .name = TYPE_MDIO_SLAVE,
     .parent = TYPE_DEVICE,
     .instance_size = sizeof(MDIOSlave),
+    .abstract = true,
     .class_size = sizeof(MDIOSlaveClass),
     .class_init = mdio_slave_class_init,
-    .interfaces = (InterfaceInfo []) {
-        {TYPE_FDT_GENERIC_MMAP},
-    },
 };
 
 static const TypeInfo mdio_bus_info = {
