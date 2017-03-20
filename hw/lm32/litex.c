@@ -76,7 +76,7 @@ litex_init(MachineState *machine)
 {
     const char *cpu_model = machine->cpu_model;
     const char *kernel_filename = machine->kernel_filename;
-    
+
     LM32CPU *cpu;
     CPULM32State *env;
 
@@ -220,6 +220,32 @@ litex_init(MachineState *machine)
 //            exit(1);
 //        }
 //    }
+
+/*
+    for (i = 0; i < sc->info->spis_num; i++) {
+        object_initialize(&s->spi[i], sizeof(s->spi[i]),
+                          sc->info->spi_typename[i]);
+        object_property_add_child(obj, "spi", OBJECT(&s->spi[i]), NULL);
+        qdev_set_parent_bus(DEVICE(&s->spi[i]), sysbus_get_default());
+    }
+*/
+
+/*
+    object_initialize(&s->i2c, sizeof(s->i2c), TYPE_ASPEED_I2C);
+    object_property_add_child(obj, "i2c", OBJECT(&s->i2c), NULL);
+    qdev_set_parent_bus(DEVICE(&s->i2c), sysbus_get_default());
+
+    // I2C
+    object_property_set_bool(OBJECT(&s->i2c), true, "realized", &err);
+    if (err) {
+        error_propagate(errp, err);
+        return;
+    }
+    sysbus_mmio_map(SYS_BUS_DEVICE(&s->i2c), 0, ASPEED_SOC_I2C_BASE);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->i2c), 0,
+                       qdev_get_gpio_in(DEVICE(&s->vic), 12));
+
+*/
 
     reset_info->bootstrap_pc = CONFIG_CPU_RESET_ADDR;
     qemu_register_reset(main_cpu_reset, reset_info);

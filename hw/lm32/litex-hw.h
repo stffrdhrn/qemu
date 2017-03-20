@@ -30,7 +30,7 @@ static inline DeviceState *litex_timer_create(hwaddr base, qemu_irq timer0_irq, 
     qdev_init_nofail(dev);
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, base);
     sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, timer0_irq);
-    
+
     return dev;
 }
 
@@ -49,6 +49,21 @@ static inline DeviceState *litex_liteeth_create(hwaddr reg_base,  hwaddr phy_bas
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 2, ethmac_sram_base);
     sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, ethmac_irq);
     return dev;
+
+    mdio = qdev_create(NULL, "mdio");
+    qdev_init_nofail(mdio);
+
+    // Create the Ethernet PHY with MDIO interface
+    eth_phy = qdev_create(NULL, "88e1116r");
+    // Add PHY to MDIO bus
+    qdev_set_parent_bus(eth_phy, qdev_get_child_bus(Opaque, "mdio-bus"));
+
+    /* Add parent to mdio node */
+    object_property_add_child(OBJECT(parent), "mdio_child", OBJECT(Opaque),
+                              NULL);
+
+    /* Set mdio property of gem device */
+    object_property_set_link(dev, mdio, "mdio", NULL);
 }
 
 
