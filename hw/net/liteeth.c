@@ -172,15 +172,23 @@ static void liteeth_update_mdio(LiteEthMdioState *m, uint16_t phy_mdio_write_reg
 
         /* check for sync */
         if (m->data == 0xffffffff) {
-	    printf("Data sync!\n");
+            printf("Datasync\n");
             m->count = 32;
         }
 
         if (m->count == 16) {
-            uint8_t start = (m->data >> 14) & 0x3;
-            uint8_t op = (m->data >> 12) & 0x3;
-            uint8_t ta = (m->data) & 0x3;
-	    printf("Start bit %08x %08x %08x!\n", (unsigned int)start, (unsigned int)op, (unsigned int)ta);
+            /*
+            struct {
+                uint16_t start   : 3; // 3
+                uint16_t op      : 1; // 4
+                uint16_t phyaddr : 5; // 9
+                uint16_t reg     : 5; // 15
+                uint16_t ta      : 1; // 16
+            };
+            */
+            uint8_t start = (m->data >> 14) & 0x3; // start
+            uint8_t op    = (m->data >> 12) & 0x3; // read/write
+            uint8_t ta    = (m->data      ) & 0x3;
 
             if (start == 1 && op == MDIO_OP_WRITE && ta == 2) {
                 m->state = MDIO_STATE_WRITING;
@@ -212,7 +220,7 @@ static void liteeth_update_mdio(LiteEthMdioState *m, uint16_t phy_mdio_write_reg
             }
         }
 
-        if (m->count == 0 && m->state) {
+        if (m->count == 0) {
             if (m->state == MDIO_STATE_WRITING) {
                 uint16_t data = m->data & 0xffff;
                 liteeth_mdio_write_reg(m, m->phy_addr, m->reg_addr, data);
@@ -437,10 +445,12 @@ static void liteeth_reset(DeviceState *d)
         s->phy_regs[i] = 0;
     }
 
-    /* defaults */
+    /* mdio state */
+    s->mdio.state = MDIO_STATE_IDLE;
     for (i = 0; i < R_MDIO_MAX; i++) {
-        s->mdio.regs[i] = 0;
+        s->mdio.regs[i] = 1 << (i % 16);
     }
+
     s->mdio.regs[R_MDIO_ID1] = 0x0022; /* Micrel KSZ8001L */
     s->mdio.regs[R_MDIO_ID2] = 0x161a;
 }
