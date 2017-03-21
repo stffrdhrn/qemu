@@ -164,6 +164,8 @@ litex_init(MachineState *machine)
     litex_liteeth_create(CSR_ETHMAC_BASE & 0x7FFFFFFF, CSR_ETHPHY_BASE & 0x7FFFFFFF, ETHMAC_BASE & 0x7FFFFFFF, irq[ETHMAC_INTERRUPT]);
 #endif
 
+    litex_i2c_create(CSR_OPSIS_I2C_BASE & 0x7FFFFFFF);
+
     /* make sure juart isn't the first chardev */
     env->juart_state = lm32_juart_init(serial_hds[1]);
 
