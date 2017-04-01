@@ -31,10 +31,11 @@
 #include "hw/loader.h"
 #include "elf.h"
 #include "sysemu/block-backend.h"
-#include "litex-hw.h"
 #include "exec/address-spaces.h"
 #include "qemu/cutils.h"
 #include "hw/char/serial.h"
+
+#include "hw/litex/hw.h"
 #include "generated/csr.h"
 #include "generated/mem.h"
 
@@ -82,7 +83,6 @@ litex_init(MachineState *machine)
     MemoryRegion *address_space_mem = get_system_memory();
 
     ResetInfo *reset_info;
-
     reset_info = g_malloc0(sizeof(ResetInfo));
 
     if (cpu_model == NULL) {
@@ -101,45 +101,7 @@ litex_init(MachineState *machine)
     /** addresses from 0x80000000 to 0xFFFFFFFF are not shadowed */
     //cpu_lm32_set_phys_msb_ignore(cpu->env, 1);
 
-#ifdef ROM_BASE
-    {
-	    MemoryRegion *phys_rom = g_new(MemoryRegion, 1);
-	    hwaddr rom_base   = ROM_BASE;
-	    size_t rom_size   = ROM_SIZE;
-	    memory_region_allocate_system_memory(phys_rom, NULL, "litex.rom", rom_size);
-	    memory_region_add_subregion(address_space_mem, rom_base, phys_rom);
-    }
-#endif
-
-#ifdef SRAM_BASE
-    {
-	    MemoryRegion *phys_sram = g_new(MemoryRegion, 1);
-	    hwaddr sram_base   = SRAM_BASE;
-	    size_t sram_size   = SRAM_SIZE;
-	    memory_region_allocate_system_memory(phys_sram, NULL, "litex.sram",    sram_size);
-	    memory_region_add_subregion(address_space_mem, sram_base, phys_sram);
-    }
-#endif
-
-#ifdef SPIFLASH_BASE
-    {
-	    MemoryRegion *phys_spiflash = g_new(MemoryRegion, 1);
-	    hwaddr spiflash_base = SPIFLASH_BASE;
-	    size_t spiflash_size = SPIFLASH_SIZE;
-	    memory_region_allocate_system_memory(phys_spiflash, NULL, "litex.spiflash", spiflash_size);
-	    memory_region_add_subregion(address_space_mem, spiflash_base, phys_spiflash);
-    }
-#endif
-
-#ifdef MAIN_RAM_BASE
-    {
-	    MemoryRegion *phys_main_ram = g_new(MemoryRegion, 1);
-	    hwaddr main_ram_base   = MAIN_RAM_BASE;
-	    size_t main_ram_size   = MAIN_RAM_SIZE;
-	    memory_region_allocate_system_memory(phys_main_ram, NULL, "litex.main_ram", main_ram_size);
-	    memory_region_add_subregion(address_space_mem, main_ram_base, phys_main_ram);
-    }
-#endif
+    litex_create_memory(address_space_mem, (qemu_irq*)(cpu->env.irq));
 
     cpu_openrisc_pic_init(cpu);
     cpu_openrisc_clock_init(cpu);
@@ -150,40 +112,6 @@ litex_init(MachineState *machine)
         irq[i] = qdev_get_gpio_in(cpu->env->pic_state, i);
     }
     */
-#define MASK 0x7FFFFFFF
-/*
-    memory_region_add_subregion(address_space_mem, tcm_base, phys_tcm);
-    memory_region_add_subregion(address_space_mem, 0xc0000000 + tcm_base,
-			                                phys_tcm_alias);
-
-    memory_region_init_alias(
-
-1023 void memory_region_add_eventfd(MemoryRegion *mr,                                                                                                                                                               
-1024                                hwaddr addr,                                                                                                                                                                    
-1025                                unsigned size,                                                                                                                                                                  
-1026                                bool match_data,                                                                                                                                                                
-1027                                uint64_t data,                                                                                                                                                                  
-1028                                EventNotifier *e);  
-*/
-    /* litex uart */
-#ifdef CSR_UART_BASE
-    litex_uart_create(CSR_UART_BASE & MASK, cpu->env.irq[UART_INTERRUPT], serial_hds[0]);
-#endif
-
-    /* litex timer*/
-#ifdef CSR_TIMER0_BASE
-    litex_timer_create(CSR_TIMER0_BASE & MASK, cpu->env.irq[TIMER0_INTERRUPT], SYSTEM_CLOCK_FREQUENCY);
-#endif
-
-/* litex ethernet*/
-#ifdef CSR_ETHMAC_BASE
-    litex_liteeth_create(CSR_ETHMAC_BASE & MASK, CSR_ETHPHY_BASE & MASK, ETHMAC_BASE & MASK, cpu->env.irq[ETHMAC_INTERRUPT]);
-#endif
-
-#ifdef CSR_OPSIS_I2C_BASE
-    litex_i2c_create(CSR_OPSIS_I2C_BASE & MASK);
-#endif
-
     /* make sure juart isn't the first chardev */
     //cpu->env->juart_state = lm32_juart_init(serial_hds[1]);
 
