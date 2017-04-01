@@ -42,7 +42,7 @@ DeviceState *litex_timer_create(hwaddr base, qemu_irq timer0_irq, uint32_t freq_
 }
 
 
-DeviceState *litex_liteeth_create(hwaddr reg_base,  hwaddr phy_base, hwaddr ethmac_sram_base, qemu_irq ethmac_irq)
+DeviceState *litex_liteeth_create(hwaddr reg_base, hwaddr phy_base, hwaddr ethmac_sram_base, qemu_irq ethmac_irq)
 {
     DeviceState *dev;
 
@@ -125,86 +125,84 @@ DeviceState *litex_qspi_create(hwaddr base, qemu_irq qspi_irq)
 }
 */
 
+#define MEM_SIZE 0x80000000
+#define MEM_MASK 0x7FFFFFFF
+
 void litex_create_memory(MemoryRegion *address_space_mem, qemu_irq irqs[])
 {
-#define MASK 0x7FFFFFFF
-/*
-    addresses from 0x80000000 to 0xFFFFFFFF are not shadowed
+    /*
+      The following two memory regions equivalent to each other;
+       (a) 0x00000000 to 0x7FFFFFFF
+       (b) 0x80000000 to 0xFFFFFFFF
 
-    memory_region_add_subregion(address_space_mem, tcm_base, phys_tcm);
-    memory_region_add_subregion(address_space_mem, 0xc0000000 + tcm_base,
-			                                phys_tcm_alias);
+      IE Memory found at 0x00000100 will also be found at 0x80000100.
 
-    memory_region_init_alias(
+      On a real system accessing the memory via (a) goes through the CPU cache,
+      while accessing it via (b) bypasses the cache.
 
-1023 void memory_region_add_eventfd(MemoryRegion *mr,                                                                                                                                                               
-1024                                hwaddr addr,                                                                                                                                                                    
-1025                                unsigned size,                                                                                                                                                                  
-1026                                bool match_data,                                                                                                                                                                
-1027                                uint64_t data,                                                                                                                                                                  
-1028                                EventNotifier *e);  
-*/
-
-
-
+      However, as QEmu doesn't emulate the CPU cache, we can just alias them
+      together.
+    */
+    MemoryRegion *shadow_mem = g_new(MemoryRegion, 1);
+    memory_region_init_alias(shadow_mem, NULL, "litex.shadow", address_space_mem, 0, MEM_SIZE);
+    memory_region_add_subregion(address_space_mem, MEM_SIZE, shadow_mem);
 
 #ifdef ROM_BASE
     {
-	    MemoryRegion *phys_rom = g_new(MemoryRegion, 1);
-	    hwaddr rom_base   = ROM_BASE;
-	    size_t rom_size   = ROM_SIZE;
-	    memory_region_allocate_system_memory(phys_rom, NULL, "litex.rom", rom_size);
-	    memory_region_add_subregion(address_space_mem, rom_base, phys_rom);
+        MemoryRegion *phys_rom = g_new(MemoryRegion, 1);
+        hwaddr rom_base   = ROM_BASE;
+        size_t rom_size   = ROM_SIZE;
+        memory_region_allocate_system_memory(phys_rom, NULL, "litex.rom", rom_size);
+        memory_region_add_subregion(address_space_mem, rom_base, phys_rom);
     }
 #endif
 
 #ifdef SRAM_BASE
     {
-	    MemoryRegion *phys_sram = g_new(MemoryRegion, 1);
-	    hwaddr sram_base   = SRAM_BASE;
-	    size_t sram_size   = SRAM_SIZE;
-	    memory_region_allocate_system_memory(phys_sram, NULL, "litex.sram", sram_size);
-	    memory_region_add_subregion(address_space_mem, sram_base, phys_sram);
+        MemoryRegion *phys_sram = g_new(MemoryRegion, 1);
+        hwaddr sram_base   = SRAM_BASE;
+        size_t sram_size   = SRAM_SIZE;
+        memory_region_allocate_system_memory(phys_sram, NULL, "litex.sram", sram_size);
+        memory_region_add_subregion(address_space_mem, sram_base, phys_sram);
     }
 #endif
 
 #ifdef SPIFLASH_BASE
     {
-	    MemoryRegion *phys_spiflash = g_new(MemoryRegion, 1);
-	    hwaddr spiflash_base = SPIFLASH_BASE;
-	    size_t spiflash_size = SPIFLASH_SIZE;
-	    memory_region_allocate_system_memory(phys_spiflash, NULL, "litex.spiflash", spiflash_size);
-	    memory_region_add_subregion(address_space_mem, spiflash_base, phys_spiflash);
+        MemoryRegion *phys_spiflash = g_new(MemoryRegion, 1);
+        hwaddr spiflash_base = SPIFLASH_BASE;
+        size_t spiflash_size = SPIFLASH_SIZE;
+        memory_region_allocate_system_memory(phys_spiflash, NULL, "litex.spiflash", spiflash_size);
+        memory_region_add_subregion(address_space_mem, spiflash_base, phys_spiflash);
     }
 #endif
 
 #ifdef MAIN_RAM_BASE
     {
-	    MemoryRegion *phys_main_ram = g_new(MemoryRegion, 1);
-	    hwaddr main_ram_base   = MAIN_RAM_BASE;
-	    size_t main_ram_size   = MAIN_RAM_SIZE;
-	    memory_region_allocate_system_memory(phys_main_ram, NULL, "litex.main_ram", main_ram_size);
-	    memory_region_add_subregion(address_space_mem, main_ram_base, phys_main_ram);
+        MemoryRegion *phys_main_ram = g_new(MemoryRegion, 1);
+        hwaddr main_ram_base   = MAIN_RAM_BASE;
+        size_t main_ram_size   = MAIN_RAM_SIZE;
+        memory_region_allocate_system_memory(phys_main_ram, NULL, "litex.main_ram", main_ram_size);
+        memory_region_add_subregion(address_space_mem, main_ram_base, phys_main_ram);
     }
 #endif
 
     /* litex uart */
 #ifdef CSR_UART_BASE
-    litex_uart_create(CSR_UART_BASE & MASK, irqs[UART_INTERRUPT], serial_hds[0]);
+    litex_uart_create(CSR_UART_BASE & MEM_MASK, irqs[UART_INTERRUPT], serial_hds[0]);
 #endif
 
     /* litex timer*/
 #ifdef CSR_TIMER0_BASE
-    litex_timer_create(CSR_TIMER0_BASE & MASK, irqs[TIMER0_INTERRUPT], SYSTEM_CLOCK_FREQUENCY);
+    litex_timer_create(CSR_TIMER0_BASE & MEM_MASK, irqs[TIMER0_INTERRUPT], SYSTEM_CLOCK_FREQUENCY);
 #endif
 
 /* litex ethernet*/
 #ifdef CSR_ETHMAC_BASE
-    litex_liteeth_create(CSR_ETHMAC_BASE & MASK, CSR_ETHPHY_BASE & MASK, ETHMAC_BASE & MASK, irqs[ETHMAC_INTERRUPT]);
+    litex_liteeth_create(CSR_ETHMAC_BASE & MEM_MASK, CSR_ETHPHY_BASE & MEM_MASK, ETHMAC_BASE & MEM_MASK, irqs[ETHMAC_INTERRUPT]);
 #endif
 
 #ifdef CSR_OPSIS_I2C_BASE
-    litex_i2c_create(CSR_OPSIS_I2C_BASE & MASK);
+    litex_i2c_create(CSR_OPSIS_I2C_BASE & MEM_MASK);
 #endif
-
 }

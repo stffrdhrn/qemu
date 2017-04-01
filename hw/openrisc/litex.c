@@ -64,11 +64,9 @@ static void cpu_irq_handler(void *opaque, int irq, int level)
 
 static void main_cpu_reset(void *opaque)
 {
-    printf("main_cpu_reset: %p\n", opaque);
     OpenRISCCPU *cpu = opaque;
 
     cpu_reset(CPU(cpu));
-
     cpu->env.pc = CONFIG_CPU_RESET_ADDR;
 }
 
@@ -79,7 +77,6 @@ litex_init(MachineState *machine)
     const char *kernel_filename = machine->kernel_filename;
 
     OpenRISCCPU *cpu;
-
     MemoryRegion *address_space_mem = get_system_memory();
 
     ResetInfo *reset_info;
@@ -88,21 +85,19 @@ litex_init(MachineState *machine)
     if (cpu_model == NULL) {
         cpu_model = "or1200";
     }
+
     cpu = cpu_openrisc_init(cpu_model);
     if (cpu == NULL) {
         fprintf(stderr, "qemu: unable to find CPU '%s'\n", cpu_model);
         exit(1);
     }
     qemu_register_reset(main_cpu_reset, cpu);
-    main_cpu_reset(cpu);
 
     reset_info->cpu = cpu;
 
-    /** addresses from 0x80000000 to 0xFFFFFFFF are not shadowed */
-    //cpu_lm32_set_phys_msb_ignore(cpu->env, 1);
-
     litex_create_memory(address_space_mem, (qemu_irq*)(cpu->env.irq));
 
+    //cpu_lm32_set_phys_msb_ignore(cpu->env, 1);
     cpu_openrisc_pic_init(cpu);
     cpu_openrisc_clock_init(cpu);
 
