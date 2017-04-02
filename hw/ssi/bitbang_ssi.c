@@ -28,10 +28,10 @@ typedef enum {
     IDLE
 } bitbang_ssi_state;
 
-typedef enum bitbang_ssi_state {
+typedef enum {
     ACTIVE2IDLE = 0,
     IDLE2ACTIVE
-} bitbang_ssi_state;
+} bitbang_ssi_sclk_state;
 
 struct bitbang_ssi_interface {
     SSIBus *bus;
@@ -39,7 +39,7 @@ struct bitbang_ssi_interface {
     // Configuration
     int transfer_size;
     bitbang_ssi_cpol_mode cpol_mode;
-    bitbang_ssi_cpol_mode cpha_mode;
+    bitbang_ssi_cpha_mode cpha_mode;
 
     // Pin state
     int last_sclk;
@@ -55,23 +55,40 @@ struct bitbang_ssi_interface {
 
 };
 
-void bitbang_ssi_get_miso(bitbang_ssi_interface *ssi)
+static void bitbang_ssi_get_miso(bitbang_ssi_interface *ssi)
 {
+    int i = 0;
     if (ssi->data_miso_count > 0) {
         ssi->last_miso = ssi->data_miso & 0x1;
-    	ssi->data_miso = ssi->data_miso >> 1;
+        ssi->data_miso = ssi->data_miso >> 1;
         ssi->data_miso_count -= 1;
     }
-    DEBUG_BITBANG_SSI("get_miso %d %d %d\n", out_bit, ssi->data_miso, ssi->data_miso_count);
+#ifdef DEBUG_BITBANG_SSI
+    {
+        DPRINTF("get_miso %x (%d)[", ssi->last_miso, ssi->data_miso_count);
+        for (i=0; i < ssi->data_miso_count; i++) {
+            printf("%s", ((ssi->data_miso >> i) & 0x1) ? "1" : "0");
+        }
+        printf("]\n");
+    }
+#endif
 }
 
-void bitbang_ssi_set_mosi(bitbang_ssi_interface *ssi)
+static void bitbang_ssi_set_mosi(bitbang_ssi_interface *ssi)
 {
-	ssi->data_mosi = ssi->data_in << 1 | ssi->mosi_level;
+    ssi->data_mosi = ssi->data_mosi << 1 | ssi->last_mosi;
     ssi->data_mosi_count += 1;
-    DEBUG_BITBANG_SSI("set_mosi %d %d %d\n", ssi->mosi_level, ssi->data_mosi, ssi->data_mosi_count);
+#ifdef DEBUG_BITBANG_SSI
+    {
+        int i = 0;
+        DPRINTF("set_mosi %x (%d)[", ssi->last_mosi, ssi->data_mosi_count);
+        for (i=0; i < ssi->data_mosi_count; i++) {
+            printf("%s", ((ssi->data_mosi >> i) & 0x1) ? "1" : "0");
+        }
+        printf("]\n");
+    }
+#endif
 }
-
 
 /* Returns MISO line level or -1. */
 int bitbang_ssi_set(bitbang_ssi_interface *ssi, bitbang_ssi_line line, int level)
@@ -82,34 +99,35 @@ int bitbang_ssi_set(bitbang_ssi_interface *ssi, bitbang_ssi_line line, int level
 
     switch(line) {
     case BITBANG_SSI_SCLK:
-	    if (ssi->last_sclk == level)
-		    return s->last_miso;
+        if (ssi->last_sclk == level)
+            return ssi->last_miso;
         break;
     case BITBANG_SSI_MOSI:
-        ssi->mosi_level = level;
-		return s->last_miso;
+        ssi->last_mosi = level;
+        return ssi->last_miso;
     case BITBANG_SSI_MISO:
-        return s->last_miso;
+        return ssi->last_miso;
     }
 
-    DEBUG_BITBANG_SSI("sclk %d->%d (state: %s)\n", ssi->last_sclk, level, ssi->state == ACTIVE ? "active" : "idle");
+    DPRINTF("sclk %d->%d (state: %s)\n", ssi->last_sclk, level, ssi->state == ACTIVE ? "active" : "idle");
 
-	if (ssi->last_sclk == 0 && level == 1) {
+    bitbang_ssi_sclk_state sclk_state = -1;
+    if (ssi->last_sclk == 0 && level == 1) {
         switch(ssi->cpol_mode) {
         case BITBANG_SSI_CPOL0:
-            mode = IDLE2ACTIVE;
+            sclk_state = IDLE2ACTIVE;
             break;
         case BITBANG_SSI_CPOL1:
-            mode = ACTIVE2IDLE;
+            sclk_state = ACTIVE2IDLE;
             break;
         }
     } else if (ssi->last_sclk == 1 && level == 0) {
         switch(ssi->cpol_mode) {
         case BITBANG_SSI_CPOL0:
-            mode = ACTIVE2IDLE;
+            sclk_state = ACTIVE2IDLE;
             break;
         case BITBANG_SSI_CPOL1:
-            mode = IDLE2ACTIVE;
+            sclk_state = IDLE2ACTIVE;
             break;
         }
     } else {
@@ -118,16 +136,17 @@ int bitbang_ssi_set(bitbang_ssi_interface *ssi, bitbang_ssi_line line, int level
     ssi->last_sclk = level;
 
     if (ssi->state == IDLE) {
-		ssi->state = ACTIVE;
-    	ssi->data_count_mosi = 0;
+        ssi->state = ACTIVE;
+        ssi->data_mosi = 0;
+        ssi->data_mosi_count = 0;
 
-    	if (ssi->cpha_mode == BITBANG_SSI_CPHA0) {
-		    return s->last_miso;
+        if (ssi->cpha_mode == BITBANG_SSI_CPHA1) {
+            return ssi->last_miso;
         }
     }
 
     if (ssi->cpha_mode == BITBANG_SSI_CPHA0) {
-        switch(mode) {
+        switch(sclk_state) {
         case IDLE2ACTIVE:
             bitbang_ssi_set_mosi(ssi);
             break;
@@ -136,7 +155,7 @@ int bitbang_ssi_set(bitbang_ssi_interface *ssi, bitbang_ssi_line line, int level
             break;
         }
     } else if (ssi->cpha_mode == BITBANG_SSI_CPHA1) {
-        switch(mode) {
+        switch(sclk_state) {
         case IDLE2ACTIVE:
             bitbang_ssi_get_miso(ssi);
             break;
@@ -147,49 +166,49 @@ int bitbang_ssi_set(bitbang_ssi_interface *ssi, bitbang_ssi_line line, int level
     }
 
     if (ssi->data_mosi_count == ssi->transfer_size) {
-        ssi->data_miso = ssi->bus->transfer(ssi->data_mosi);
+        ssi->data_miso = ssi_transfer(ssi->bus, ssi->data_mosi);
         ssi->data_miso_count = ssi->transfer_size;
-        DEBUG_BITBANG_SSI("transfer(%d) ->%d\n", ssi->data_mosi, data->miso);
+        DPRINTF("transfer(%x) -> %x\n", ssi->data_mosi, ssi->data_miso);
         ssi->state = IDLE;
     }
-    return s->last_miso;
+    return ssi->last_miso;
 }
 
 bitbang_ssi_interface *bitbang_ssi_init(SSIBus *bus, bitbang_ssi_cpol_mode cpol_mode, bitbang_ssi_cpha_mode cpha_mode, int transfer_size)
 {
-    DEBUG_BITBANG_SSI("init(cpol:%d, cpha:%d, size:%d\n", cpol_mode, cpha_mode, transfer_size);
-    bitbang_ssi_interface *s;
+    DPRINTF("init(cpol:%d, cpha:%d, size:%d)\n", cpol_mode, cpha_mode, transfer_size);
+    bitbang_ssi_interface *ssi;
 
-    s = g_malloc0(sizeof(bitbang_ssi_interface));
+    ssi = g_malloc0(sizeof(bitbang_ssi_interface));
 
-    s->bus = bus;
+    ssi->bus = bus;
 
     // Configuration
-    assert(transfer_size < (sizeof(s->data_miso)*8));
-    s->transfer_size = transfer_size;
-    s->cpol_mode = cpol_mode;
-    s->cpha_mode = cpha_mode;
+    assert(transfer_size < (sizeof(ssi->data_miso)*8));
+    ssi->transfer_size = transfer_size;
+    ssi->cpol_mode = cpol_mode;
+    ssi->cpha_mode = cpha_mode;
 
     // Pin values
     switch (cpol_mode) {
     case BITBANG_SSI_CPOL0:
-        s->last_sclk = 0;
+        ssi->last_sclk = 0;
         break;
     case BITBANG_SSI_CPOL1:
-        s->last_sclk = 1;
+        ssi->last_sclk = 1;
         break;
     }
-    s->last_mosi = 0;
-    s->last_miso = 0;
+    ssi->last_mosi = 0;
+    ssi->last_miso = 0;
 
     // Data transmission state
-    s->state = IDLE;
-    s->data_miso = 0;
-    s->data_miso_count = 0;
-    s->data_mosi = 0;
-    s->data_mosi_count = 0;
+    ssi->state = IDLE;
+    ssi->data_miso = 0;
+    ssi->data_miso_count = 0;
+    ssi->data_mosi = 0;
+    ssi->data_mosi_count = 0;
 
-    return s;
+    return ssi;
 }
 
 /* GPIO interface.  */
@@ -227,8 +246,8 @@ static void gpio_ssi_init(Object *obj)
     memory_region_init(&s->dummy_iomem, obj, "gpio_ssi", 0);
     sysbus_init_mmio(sbd, &s->dummy_iomem);
 
-    bus = ssi_init_bus(dev, "ssi");
-    s->bitbang = bitbang_ssi_init(bus);
+    bus = ssi_create_bus(dev, "ssi");
+    s->bitbang = bitbang_ssi_init(bus, BITBANG_SSI_CPOL0, BITBANG_SSI_CPHA0, 8);
 
     qdev_init_gpio_in(dev, bitbang_ssi_gpio_set, 2);
     qdev_init_gpio_out(dev, &s->out, 1);

@@ -22,6 +22,6 @@ typedef enum {
 } bitbang_ssi_cpha_mode;
 
 bitbang_ssi_interface *bitbang_ssi_init(SSIBus *bus, bitbang_ssi_cpol_mode cpol_mode, bitbang_ssi_cpha_mode cpha_mode, int transfer_size);
-int bitbang_ssi_set(bitbang_ssi_interface *ssi, int line, int level);
+int bitbang_ssi_set(bitbang_ssi_interface *ssi, bitbang_ssi_line line, int level);
 
 #endif

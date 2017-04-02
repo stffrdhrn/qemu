@@ -32,7 +32,7 @@
 #include "qapi/error.h"
 
 #ifndef M25P80_ERR_DEBUG
-#define M25P80_ERR_DEBUG 0
+#define M25P80_ERR_DEBUG 10
 #endif
 
 #define DB_PRINT_L(level, ...) do { \
@@ -1259,6 +1259,13 @@ static uint32_t m25p80_transfer8(SSISlave *ss, uint32_t tx)
     return r;
 }
 
+void* m25p80_get_storage(void *opaque);
+void* m25p80_get_storage(void *opaque)
+{
+    Flash *s = M25P80(opaque);
+    return s->storage;
+}
+
 static void m25p80_realize(SSISlave *ss, Error **errp)
 {
     Flash *s = M25P80(ss);
@@ -1271,6 +1278,7 @@ static void m25p80_realize(SSISlave *ss, Error **errp)
     s->dirty_page = -1;
 
     if (s->blk) {
+	int rsize = 0;
         uint64_t perm = BLK_PERM_CONSISTENT_READ |
                         (blk_is_read_only(s->blk) ? 0 : BLK_PERM_WRITE);
         ret = blk_set_perm(s->blk, perm, BLK_PERM_ALL, errp);
@@ -1281,7 +1289,9 @@ static void m25p80_realize(SSISlave *ss, Error **errp)
         DB_PRINT_L(0, "Binding to IF_MTD drive\n");
         s->storage = blk_blockalign(s->blk, s->size);
 
-        if (blk_pread(s->blk, 0, s->storage, s->size) != s->size) {
+        rsize = blk_pread(s->blk, 0, s->storage, s->size);
+        if (rsize != s->size) {
+            DB_PRINT_L(0, "Wanted s->size %d, got %d\n", s->size, rsize);
             error_setg(errp, "failed to read the initial flash content");
             return;
         }
