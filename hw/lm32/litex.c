@@ -29,7 +29,7 @@
 #include "hw/loader.h"
 #include "elf.h"
 #include "sysemu/block-backend.h"
-#include "litex-hw.h"
+#include "hw/litex/hw.h"
 #include "litex.h"
 #include "exec/address-spaces.h"
 #include "qemu/cutils.h"
@@ -100,77 +100,19 @@ litex_init(MachineState *machine)
     env = &cpu->env;
     reset_info->cpu = cpu;
 
-    /** addresses from 0x80000000 to 0xFFFFFFFF are not shadowed */
-    cpu_lm32_set_phys_msb_ignore(env, 1);
-
-#ifdef ROM_BASE
-    {
-	    MemoryRegion *phys_rom = g_new(MemoryRegion, 1);
-	    hwaddr rom_base   = ROM_BASE;
-	    size_t rom_size   = ROM_SIZE;
-	    memory_region_allocate_system_memory(phys_rom, NULL, "litex.rom", rom_size);
-	    memory_region_add_subregion(address_space_mem, rom_base, phys_rom);
-    }
-#endif
-
-#ifdef SRAM_BASE
-    {
-	    MemoryRegion *phys_sram = g_new(MemoryRegion, 1);
-	    hwaddr sram_base   = SRAM_BASE;
-	    size_t sram_size   = SRAM_SIZE;
-	    memory_region_allocate_system_memory(phys_sram, NULL, "litex.sram",    sram_size);
-	    memory_region_add_subregion(address_space_mem, sram_base, phys_sram);
-    }
-#endif
-
-#ifdef SPIFLASH_BASE
-    {
-	    MemoryRegion *phys_spiflash = g_new(MemoryRegion, 1);
-	    hwaddr spiflash_base = SPIFLASH_BASE;
-	    size_t spiflash_size = SPIFLASH_SIZE;
-	    memory_region_allocate_system_memory(phys_spiflash, NULL, "litex.spiflash", spiflash_size);
-	    memory_region_add_subregion(address_space_mem, spiflash_base, phys_spiflash);
-    }
-#endif
-
-#ifdef MAIN_RAM_BASE
-    {
-	    MemoryRegion *phys_main_ram = g_new(MemoryRegion, 1);
-	    hwaddr main_ram_base   = MAIN_RAM_BASE;
-	    size_t main_ram_size   = MAIN_RAM_SIZE;
-	    memory_region_allocate_system_memory(phys_main_ram, NULL, "litex.main_ram", main_ram_size);
-	    memory_region_add_subregion(address_space_mem, main_ram_base, phys_main_ram);
-    }
-#endif
-
     /* create irq lines */
     env->pic_state = litex_pic_init(qemu_allocate_irq(cpu_irq_handler, cpu, 0));
     for (i = 0; i < 32; i++) {
         irq[i] = qdev_get_gpio_in(env->pic_state, i);
     }
 
-    /* litex uart */
-#ifdef CSR_UART_BASE
-    litex_uart_create(CSR_UART_BASE & 0x7FFFFFFF, irq[UART_INTERRUPT], serial_hds[0]);
-#endif
+    litex_create_memory(address_space_mem, irq);
 
-    /* litex timer*/
-#ifdef CSR_TIMER0_BASE
-    litex_timer_create(CSR_TIMER0_BASE & 0x7FFFFFFF, irq[TIMER0_INTERRUPT], SYSTEM_CLOCK_FREQUENCY);
-#endif
-
-/* litex ethernet*/
-#ifdef CSR_ETHMAC_BASE
-    litex_liteeth_create(CSR_ETHMAC_BASE & 0x7FFFFFFF, CSR_ETHPHY_BASE & 0x7FFFFFFF, ETHMAC_BASE & 0x7FFFFFFF, irq[ETHMAC_INTERRUPT]);
-#endif
-
-#ifdef CSR_OPSIS_I2C_BASE
-    litex_i2c_create(CSR_OPSIS_I2C_BASE & 0x7FFFFFFF);
-#endif
+    /** addresses from 0x80000000 to 0xFFFFFFFF are not shadowed */
+    cpu_lm32_set_phys_msb_ignore(env, 1);
 
     /* make sure juart isn't the first chardev */
     env->juart_state = lm32_juart_init(serial_hds[1]);
-
 
 #ifdef ROM_BASE
 #ifndef ROM_DISABLE
@@ -224,32 +166,6 @@ litex_init(MachineState *machine)
 //            exit(1);
 //        }
 //    }
-
-/*
-    for (i = 0; i < sc->info->spis_num; i++) {
-        object_initialize(&s->spi[i], sizeof(s->spi[i]),
-                          sc->info->spi_typename[i]);
-        object_property_add_child(obj, "spi", OBJECT(&s->spi[i]), NULL);
-        qdev_set_parent_bus(DEVICE(&s->spi[i]), sysbus_get_default());
-    }
-*/
-
-/*
-    object_initialize(&s->i2c, sizeof(s->i2c), TYPE_ASPEED_I2C);
-    object_property_add_child(obj, "i2c", OBJECT(&s->i2c), NULL);
-    qdev_set_parent_bus(DEVICE(&s->i2c), sysbus_get_default());
-
-    // I2C
-    object_property_set_bool(OBJECT(&s->i2c), true, "realized", &err);
-    if (err) {
-        error_propagate(errp, err);
-        return;
-    }
-    sysbus_mmio_map(SYS_BUS_DEVICE(&s->i2c), 0, ASPEED_SOC_I2C_BASE);
-    sysbus_connect_irq(SYS_BUS_DEVICE(&s->i2c), 0,
-                       qdev_get_gpio_in(DEVICE(&s->vic), 12));
-
-*/
 
     reset_info->bootstrap_pc = CONFIG_CPU_RESET_ADDR;
     qemu_register_reset(main_cpu_reset, reset_info);
