@@ -46,7 +46,7 @@ mkdir -p build
 		download "flash image ($CPU)" $CPU/flash.bin flash-$CPU.bin
 	done
 
-	if [ ! -f config.log ]; then
+	if [ ! -f config.log -o ! -f Makefile -o ! -f qemu-img ]; then
 		../configure \
 				--target-list=lm32-softmmu,or32-softmmu \
 				--python=/usr/bin/python2 \
