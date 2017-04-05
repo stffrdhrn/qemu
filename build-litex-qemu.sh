@@ -15,22 +15,29 @@ function download() {
 	LPATH=$3
 	if [ ! -e "$LPATH" ]; then
 		# Automatically figure out the latest revision
-		if [ "$REV" = "" ]; then
+		if [ -e gateware.rev ]; then
+			REV="$(cat gateware.rev)"
+		fi
+		if [ x"$REV" = x"" ]; then
 			if [ ! -e gateware.rev ]; then
-				REV=$(svn ls $GITHUB_URL/trunk/archive/$BRANCH | sort | tail -n1 | sed -e's-/$--')
+				REV="$(svn ls $GITHUB_URL/trunk/archive/$BRANCH | sort | tail -n1 | sed -e's-/$--')"
+				if [ x"$REV" = x"" ]; then
+					echo "Unable to find upstream revision!"
+				fi
 				echo $REV > gateware.rev
 				echo "Using revision $REV"
-			else
-				REV="$(cat gateware.rev)"
 			fi
 		fi
 		echo
-		echo "Download $NAME"
+		echo "Download $NAME from $GITHUB_URL/trunk/archive/$BRANCH/$REV/$PLATFORM/$TARGET/$RPATH"
 		echo "---------------------------------------"
 		# archive/master/v0.0.3-696-g2f815c1/minispartan6/base/lm32
 		svn export --force $GITHUB_URL/trunk/archive/$BRANCH/$REV/$PLATFORM/$TARGET/$RPATH $LPATH | grep -v "^Export"
 	fi
 }
+
+
+echo "Using headers from branch '$BRANCH' for '$PLATFORM/$TARGET'"
 
 mkdir -p build
 (
