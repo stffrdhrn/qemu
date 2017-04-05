@@ -67,6 +67,7 @@ static void main_cpu_reset(void *opaque)
     OpenRISCCPU *cpu = opaque;
 
     cpu_reset(CPU(cpu));
+    printf("Resetting PC to: 0x%x\n", CONFIG_CPU_RESET_ADDR);
     cpu->env.pc = CONFIG_CPU_RESET_ADDR;
 }
 
@@ -191,7 +192,6 @@ litex_init(MachineState *machine)
 */
 
     reset_info->bootstrap_pc = CONFIG_CPU_RESET_ADDR;
-    assert(CONFIG_CPU_RESET_ADDR == 0);
 }
 
 static void litex_machine_init(MachineClass *mc)
