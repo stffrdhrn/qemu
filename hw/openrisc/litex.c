@@ -40,8 +40,6 @@
 #include "generated/mem.h"
 
 
-#define BIOS_FILENAME    "bios.bin"
-
 typedef struct {
     OpenRISCCPU *cpu;
     hwaddr bootstrap_pc;
@@ -64,11 +62,12 @@ static void cpu_irq_handler(void *opaque, int irq, int level)
 
 static void main_cpu_reset(void *opaque)
 {
-    OpenRISCCPU *cpu = opaque;
+    ResetInfo *reset_info = opaque;
+    OpenRISCCPU *cpu = reset_info->cpu;
 
     cpu_reset(CPU(cpu));
-    printf("Resetting PC to: 0x%x\n", CONFIG_CPU_RESET_ADDR);
-    cpu->env.pc = CONFIG_CPU_RESET_ADDR;
+    printf("Resetting PC to: 0x%x\n", (unsigned int)reset_info->bootstrap_pc);
+    cpu->env.pc = reset_info->bootstrap_pc;
 }
 
 static void
@@ -92,7 +91,7 @@ litex_init(MachineState *machine)
         fprintf(stderr, "qemu: unable to find CPU '%s'\n", cpu_model);
         exit(1);
     }
-    qemu_register_reset(main_cpu_reset, cpu);
+    qemu_register_reset(main_cpu_reset, reset_info);
 
     reset_info->cpu = cpu;
 
@@ -102,7 +101,7 @@ litex_init(MachineState *machine)
     cpu_openrisc_pic_init(cpu);
     cpu_openrisc_clock_init(cpu);
 
-    /* create irq lines 
+    /* create irq lines
     cpu->env->pic_state = litex_pic_init(qemu_allocate_irq(cpu_irq_handler, cpu, 0));
     for (i = 0; i < 32; i++) {
         irq[i] = qdev_get_gpio_in(cpu->env->pic_state, i);
@@ -111,87 +110,21 @@ litex_init(MachineState *machine)
     /* make sure juart isn't the first chardev */
     //cpu->env->juart_state = lm32_juart_init(serial_hds[1]);
 
-
-#ifdef ROM_BASE
-#ifndef ROM_DISABLE
-    /* load bios rom */
-    char *bios_filename;
-    if (bios_name == NULL) {
-        bios_name = BIOS_FILENAME;
-    }
-    bios_filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, bios_name);
-
-    if (bios_filename) {
-        int bios_size = load_image_targphys(bios_filename, ROM_BASE, ROM_SIZE);
-        if (bios_size < 0) {
-            fprintf(stderr, "qemu: could not load bios '%s'\n", bios_filename);
-            exit(1);
-        }
-    }
-    g_free(bios_filename);
-#endif
-#endif
-
-//    /* if no kernel is given no valid bios rom is a fatal error */
-//    if (!kernel_filename  && !bios_filename && !qtest_enabled()) {
-//        fprintf(stderr, "qemu: could not load Milkymist One bios '%s'\n",
-//                bios_name);
-//        exit(1);
-//    }
-
     if (kernel_filename) {
-        int kernel_size = load_image_targphys(kernel_filename, SPIFLASH_BASE, SPIFLASH_SIZE);
+        uint64_t entry;
+        int kernel_size;
+
+        /* Boots a kernel elf binary.  */
+        kernel_size = load_elf(kernel_filename, NULL, NULL, &entry, NULL, NULL, 1, EM_LATTICEMICO32, 0, 0);
+        reset_info->bootstrap_pc = entry;
+
         if (kernel_size < 0) {
             fprintf(stderr, "qemu: could not load kernel '%s'\n",    kernel_filename);
             exit(1);
         }
+    } else {
+        reset_info->bootstrap_pc = CONFIG_CPU_RESET_ADDR;
     }
-
-//        uint64_t entry;
-//        int kernel_size;
-//
-//        /* Boots a kernel elf binary.  */
-//        kernel_size = load_elf(kernel_filename, NULL, NULL, &entry, NULL, NULL, 1, EM_LATTICEMICO32, 0, 0);
-//        reset_info->bootstrap_pc = entry;
-//
-//        if (kernel_size < 0) {
-//            kernel_size = load_image_targphys(kernel_filename, main_ram_base, main_ram_size);
-//            reset_info->bootstrap_pc = main_ram_base;
-//        }
-//
-//        if (kernel_size < 0) {
-//            fprintf(stderr, "qemu: could not load kernel '%s'\n",    kernel_filename);
-//            exit(1);
-//        }
-//    }
-
-/*
-    for (i = 0; i < sc->info->spis_num; i++) {
-        object_initialize(&s->spi[i], sizeof(s->spi[i]),
-                          sc->info->spi_typename[i]);
-        object_property_add_child(obj, "spi", OBJECT(&s->spi[i]), NULL);
-        qdev_set_parent_bus(DEVICE(&s->spi[i]), sysbus_get_default());
-    }
-*/
-
-/*
-    object_initialize(&s->i2c, sizeof(s->i2c), TYPE_ASPEED_I2C);
-    object_property_add_child(obj, "i2c", OBJECT(&s->i2c), NULL);
-    qdev_set_parent_bus(DEVICE(&s->i2c), sysbus_get_default());
-
-    // I2C
-    object_property_set_bool(OBJECT(&s->i2c), true, "realized", &err);
-    if (err) {
-        error_propagate(errp, err);
-        return;
-    }
-    sysbus_mmio_map(SYS_BUS_DEVICE(&s->i2c), 0, ASPEED_SOC_I2C_BASE);
-    sysbus_connect_irq(SYS_BUS_DEVICE(&s->i2c), 0,
-                       qdev_get_gpio_in(DEVICE(&s->vic), 12));
-
-*/
-
-    reset_info->bootstrap_pc = CONFIG_CPU_RESET_ADDR;
 }
 
 static void litex_machine_init(MachineClass *mc)

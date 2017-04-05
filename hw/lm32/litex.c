@@ -38,8 +38,6 @@
 #include "generated/mem.h"
 
 
-#define BIOS_FILENAME    "bios.bin"
-
 typedef struct {
     LM32CPU *cpu;
     hwaddr bootstrap_pc;
@@ -66,6 +64,7 @@ static void main_cpu_reset(void *opaque)
     cpu_reset(CPU(reset_info->cpu));
 
     /* init defaults */
+    printf("Resetting PC to: 0x%x\n", (unsigned int)reset_info->bootstrap_pc);
     env->pc = reset_info->bootstrap_pc;
     env->eba = ROM_BASE;
     env->deba = ROM_BASE;
@@ -114,60 +113,20 @@ litex_init(MachineState *machine)
     /* make sure juart isn't the first chardev */
     env->juart_state = lm32_juart_init(serial_hds[1]);
 
-#ifdef ROM_BASE
-#ifndef ROM_DISABLE
-    /* load bios rom */
-    char *bios_filename;
-    if (bios_name == NULL) {
-        bios_name = BIOS_FILENAME;
-    }
-    bios_filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, bios_name);
-
-    if (bios_filename) {
-        int bios_size = load_image_targphys(bios_filename, ROM_BASE, ROM_SIZE);
-        if (bios_size < 0) {
-            fprintf(stderr, "qemu: could not load bios '%s'\n", bios_filename);
-            exit(1);
-        }
-    }
-    g_free(bios_filename);
-#endif
-#endif
-
-//    /* if no kernel is given no valid bios rom is a fatal error */
-//    if (!kernel_filename  && !bios_filename && !qtest_enabled()) {
-//        fprintf(stderr, "qemu: could not load Milkymist One bios '%s'\n",
-//                bios_name);
-//        exit(1);
-//    }
-
     if (kernel_filename) {
-        int kernel_size = load_image_targphys(kernel_filename, SPIFLASH_BASE, SPIFLASH_SIZE);
+        uint64_t entry;
+        int kernel_size;
+
+        /* Boots a kernel elf binary.  */
+        kernel_size = load_elf(kernel_filename, NULL, NULL, &entry, NULL, NULL, 1, EM_LATTICEMICO32, 0, 0);
         if (kernel_size < 0) {
             fprintf(stderr, "qemu: could not load kernel '%s'\n",    kernel_filename);
             exit(1);
         }
+        reset_info->bootstrap_pc = entry;
+    } else {
+        reset_info->bootstrap_pc = CONFIG_CPU_RESET_ADDR;
     }
-
-//        uint64_t entry;
-//        int kernel_size;
-//
-//        /* Boots a kernel elf binary.  */
-//        kernel_size = load_elf(kernel_filename, NULL, NULL, &entry, NULL, NULL, 1, EM_LATTICEMICO32, 0, 0);
-//        reset_info->bootstrap_pc = entry;
-//
-//        if (kernel_size < 0) {
-//            kernel_size = load_image_targphys(kernel_filename, main_ram_base, main_ram_size);
-//            reset_info->bootstrap_pc = main_ram_base;
-//        }
-//
-//        if (kernel_size < 0) {
-//            fprintf(stderr, "qemu: could not load kernel '%s'\n",    kernel_filename);
-//            exit(1);
-//        }
-//    }
-
-    reset_info->bootstrap_pc = CONFIG_CPU_RESET_ADDR;
     qemu_register_reset(main_cpu_reset, reset_info);
 }
 
