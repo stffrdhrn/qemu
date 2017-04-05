@@ -36,8 +36,9 @@ function download() {
 	fi
 }
 
-
+echo
 echo "Using headers from branch '$BRANCH' for '$PLATFORM/$TARGET'"
+echo
 
 mkdir -p build
 (
@@ -78,26 +79,51 @@ mkdir -p build
 		fi
 	done
 
+	declare -a EXTRA_ARGS
+	# BIOS
+	if grep -q 'ROM_BASE 0x00000000' generated/mem.h; then
+		echo "Platform has BIOS ROM, adding BIOS"
+		EXTRA_ARGS+=('-bios build/bios-$CPU.bin')
+	fi
+	# SPI Flash
+	if grep -q 'SPIFLASH_BASE' generated/mem.h; then
+		echo "Platform has SPI flash (WARNING: assuming n25q16!)"
+		EXTRA_ARGS+=('-drive if=mtd,format=qcow2,file=build/flash-$CPU.qcow2,serial=n25q16')
+	fi
+	# Ethernet
+	if grep -q 'ETHMAC_BASE' generated/csr.h; then
+		echo "Platform has Ethernet, **needs to be setup**!"
+		EXTRA_ARGS+=('-net nic -net tap,ifname=tap0,script=no,downscript=no')
+	fi
+
 	echo
 	echo "To use run something like the following;"
+
+	for CPU in $CPUS; do
+		if [ "$CPU" = "or1k" ]; then
+			QEMU_CPU=or32
+		else
+			QEMU_CPU="$CPU"
+		fi
+		cat <<EOF
+ build/$QEMU_CPU-softmmu/qemu-system-$QEMU_CPU \\
+        -nographic -nodefaults \\
+        -monitor pty \\
+        -serial stdio \\
+        -M litex \\
+EOF
+		for EXTRA in "${EXTRA_ARGS[@]}"; do
+			EXTRA=$(eval echo "$EXTRA")
+			cat<<EOF
+	$EXTRA \\
+EOF
+		done
+	echo
+	done
 	cat <<'EOF'
-build/lm32-softmmu/qemu-system-lm32 \
-        -nographic -nodefaults \
-        -monitor pty \
-        -serial stdio \
-        -M litex
 
-build/or32-softmmu/qemu-system-or32 \
-        -nographic -nodefaults \
-        -monitor pty \
-        -serial stdio \
-        -M litex
-
-Use '-bios build/bios-{lm32,or1k}.bin' to use LiteX BIOS
-Use '-drive if=mtd,format=qcow2,file=build/flash-{lm32,or1k}.qcow2,serial=n25q16' for SPI flash
-Use '-net nic -net tap,ifname=tap0,script=no,downscript=no' for Ethernet
+ Note: QEmu uses or32 while LiteX uses or1k for the OpenRISC architecture
 
 EOF
-	echo "Note: QEmu uses or32 while LiteX uses or1k for the OpenRISC architecture"
-	echo
+
 )
