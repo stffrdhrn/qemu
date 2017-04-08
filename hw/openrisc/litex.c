@@ -115,7 +115,7 @@ litex_init(MachineState *machine)
         int kernel_size;
 
         /* Boots a kernel elf binary.  */
-        kernel_size = load_elf(kernel_filename, NULL, NULL, &entry, NULL, NULL, 1, EM_LATTICEMICO32, 0, 0);
+        kernel_size = load_elf(kernel_filename, NULL, NULL, &entry, NULL, NULL, 1, EM_OPENRISC, 0, 0);
         reset_info->bootstrap_pc = entry;
 
         if (kernel_size < 0) {
