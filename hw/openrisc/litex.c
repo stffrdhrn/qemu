@@ -46,19 +46,6 @@ typedef struct {
     hwaddr flash_base;
 } ResetInfo;
 
-/*
-static void cpu_irq_handler(void *opaque, int irq, int level)
-{
-    OpenRISCCPU *cpu = opaque;
-    CPUState *cs = CPU(cpu);
-
-    if (level) {
-        cpu_interrupt(cs, CPU_INTERRUPT_HARD);
-    } else {
-        cpu_reset_interrupt(cs, CPU_INTERRUPT_HARD);
-    }
-}
-*/
 
 static void main_cpu_reset(void *opaque)
 {
@@ -95,18 +82,12 @@ litex_init(MachineState *machine)
 
     reset_info->cpu = cpu;
 
-    litex_create_memory(address_space_mem, (qemu_irq*)(cpu->env.irq));
-
     //cpu_lm32_set_phys_msb_ignore(cpu->env, 1);
     cpu_openrisc_pic_init(cpu);
     cpu_openrisc_clock_init(cpu);
 
-    /* create irq lines
-    cpu->env->pic_state = litex_pic_init(qemu_allocate_irq(cpu_irq_handler, cpu, 0));
-    for (i = 0; i < 32; i++) {
-        irq[i] = qdev_get_gpio_in(cpu->env->pic_state, i);
-    }
-    */
+    litex_create_memory(address_space_mem, (qemu_irq*)(cpu->env.irq));
+
     /* make sure juart isn't the first chardev */
     //cpu->env->juart_state = lm32_juart_init(serial_hds[1]);
 
