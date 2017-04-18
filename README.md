@@ -16,7 +16,7 @@ As qemu-litex targets a specific LiteX SoC it currently needs the configuration
 information from that SoC.
 
 From fresh install, you will need the following packages:
-sudo apt-get install flex bison autoconf libtool
+sudo apt-get install flex bison autoconf libtool libpixman-1-dev
 
 ### Building inside HDMI2USB-litex-firmware
 
