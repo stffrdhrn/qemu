@@ -19,14 +19,12 @@ function download() {
 			REV="$(cat gateware.rev)"
 		fi
 		if [ x"$REV" = x"" ]; then
-			if [ ! -e gateware.rev ]; then
-				REV="$(svn ls $GITHUB_URL/trunk/archive/$BRANCH | sort | tail -n1 | sed -e's-/$--')"
-				if [ x"$REV" = x"" ]; then
-					echo "Unable to find upstream revision!"
-				fi
-				echo $REV > gateware.rev
-				echo "Using revision $REV"
+			REV="$(svn ls $GITHUB_URL/trunk/archive/$BRANCH | sort | tail -n1 | sed -e's-/$--')"
+			if [ x"$REV" = x"" ]; then
+				echo "Unable to find upstream revision!"
 			fi
+			echo $REV > gateware.rev
+			echo "Using revision $REV"
 		fi
 		echo
 		echo "Download $NAME from $GITHUB_URL/trunk/archive/$BRANCH/$REV/$PLATFORM/$TARGET/$RPATH"
