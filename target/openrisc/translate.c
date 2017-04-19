@@ -756,7 +756,7 @@ static void dec_misc(DisasContext *dc, uint32_t insn)
         switch (op1) {
         case 0x01:    /* l.nop */
             LOG_DIS("l.nop %d\n", I16);
-            {
+            if (I16) {
                 TCGv_i32 arg = tcg_const_i32(I16);
                 gen_helper_nop(arg);
             }
