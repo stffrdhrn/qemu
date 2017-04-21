@@ -270,7 +270,6 @@ typedef struct CPUOpenRISCTLBContext {
 
 typedef struct CPUOpenRISCState {
     target_ulong shadow_gpr[16][32]; /* Shadow registers */
-    target_ulong * gpr;       /* General registers (backed by shadow) */
 
     target_ulong pc;          /* Program counter */
     target_ulong ppc;         /* Prev PC */
@@ -394,6 +393,16 @@ int cpu_openrisc_get_phys_data(OpenRISCCPU *cpu,
 #define TB_FLAGS_R0_0  2
 #define TB_FLAGS_OVE   SR_OVE
 
+static inline uint32_t cpu_get_gpr(const CPUOpenRISCState *env, int i)
+{
+    return env->shadow_gpr[0][i];
+}
+
+static inline void cpu_set_gpr(CPUOpenRISCState *env, int i, uint32_t val)
+{
+    env->shadow_gpr[0][i] = val;
+}
+
 static inline void cpu_get_tb_cpu_state(CPUOpenRISCState *env,
                                         target_ulong *pc,
                                         target_ulong *cs_base, uint32_t *flags)
@@ -401,7 +410,7 @@ static inline void cpu_get_tb_cpu_state(CPUOpenRISCState *env,
     *pc = env->pc;
     *cs_base = 0;
     *flags = (env->dflag
-              | (env->gpr[0] == 0 ? TB_FLAGS_R0_0 : 0)
+              | (cpu_get_gpr(env, 0) == 0 ? TB_FLAGS_R0_0 : 0)
               | (env->sr & SR_OVE));
 }
 

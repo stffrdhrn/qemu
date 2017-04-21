@@ -28,8 +28,6 @@ static int env_post_load(void *opaque, int version_id)
 {
     CPUOpenRISCState *env = opaque;
 
-    env->gpr = env->shadow_gpr[0];
-
     /* Restore MMU handlers */
     if (env->sr & SR_DME) {
         env->tlb->cpu_openrisc_map_address_data =

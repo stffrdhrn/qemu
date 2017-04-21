@@ -46,7 +46,6 @@ static void openrisc_cpu_reset(CPUState *s)
 
     memset(&cpu->env, 0, offsetof(CPUOpenRISCState, end_reset_fields));
 
-    cpu->env.gpr = cpu->env.shadow_gpr[0];
     cpu->env.pc = 0x100;
     cpu->env.sr = SR_FO | SR_SM;
     cpu->env.lock_addr = -1;
