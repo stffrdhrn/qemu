@@ -35,36 +35,76 @@
 
 #define KERNEL_LOAD_ADDR 0x100
 
+static struct openrisc_boot_info {
+    uint32_t bootstrap_pc;
+} boot_info;
+
 static void main_cpu_reset(void *opaque)
 {
     OpenRISCCPU *cpu = opaque;
+    CPUState *cs = CPU(cpu);
 
     cpu_reset(CPU(cpu));
+
+    cpu_set_pc(cs, boot_info.bootstrap_pc);
 }
 
-static void openrisc_sim_net_init(MemoryRegion *address_space,
-                                  hwaddr base,
-                                  hwaddr descriptors,
-                                  qemu_irq irq, NICInfo *nd)
+/* Changes
+ *  1. Use sysbus_mmio_map
+ *  2. Use smp irq connect*/
+static void openrisc_sim_net_init(hwaddr base, hwaddr descriptors,
+                                  int num_cpus, qemu_irq **cpu_irqs,
+                                  int irq_pin, NICInfo *nd)
 {
     DeviceState *dev;
     SysBusDevice *s;
+    int i;
 
     dev = qdev_create(NULL, "open_eth");
     qdev_set_nic_properties(dev, nd);
     qdev_init_nofail(dev);
 
     s = SYS_BUS_DEVICE(dev);
-    sysbus_connect_irq(s, 0, irq);
-    memory_region_add_subregion(address_space, base,
-                                sysbus_mmio_get_region(s, 0));
-    memory_region_add_subregion(address_space, descriptors,
-                                sysbus_mmio_get_region(s, 1));
+    for(i = 0; i < num_cpus; i++) {
+        sysbus_connect_irq(s, 0, cpu_irqs[i][irq_pin]);
+    }
+    sysbus_mmio_map(s, 0, base);
+    sysbus_mmio_map(s, 1, descriptors);
 }
 
-static void cpu_openrisc_load_kernel(ram_addr_t ram_size,
-                                     const char *kernel_filename,
-                                     OpenRISCCPU *cpu)
+static void openrisc_sim_ompic_init(hwaddr base, int num_cpus,
+                                    qemu_irq **cpu_irqs, int irq_pin)
+{
+    DeviceState *dev;
+    SysBusDevice *s;
+    int i;
+
+    dev = qdev_create(NULL, "or1k-ompic");
+    qdev_prop_set_uint32(dev, "num-cpus", num_cpus);
+    qdev_init_nofail(dev);
+
+    s = SYS_BUS_DEVICE(dev);
+    for(i = 0; i < num_cpus; i++) {
+        sysbus_connect_irq(s, i, cpu_irqs[i][irq_pin]);
+    }
+    sysbus_mmio_map(s, 0, base);
+}
+
+static void openrisc_sim_omtimer_init(hwaddr base)
+{
+    DeviceState *dev;
+    SysBusDevice *s;
+
+    dev = qdev_create(NULL, "or1k-omtimer");
+    qdev_init_nofail(dev);
+
+    s = SYS_BUS_DEVICE(dev);
+    sysbus_mmio_map(s, 0, base);
+}
+
+/* Changed - boot_info remove name cpu_ */
+static void openrisc_load_kernel(ram_addr_t ram_size,
+                                 const char *kernel_filename)
 {
     long kernel_size;
     uint64_t elf_entry;
@@ -74,7 +114,9 @@ static void cpu_openrisc_load_kernel(ram_addr_t ram_size,
         kernel_size = load_elf(kernel_filename, NULL, NULL,
                                &elf_entry, NULL, NULL, 1, EM_OPENRISC,
                                1, 0);
-        entry = elf_entry;
+        // TODO this is a hack old code never actually used entry
+        // now new code is so we need to jump to 0x100.  Maybe we don
+        entry = elf_entry + KERNEL_LOAD_ADDR;
         if (kernel_size < 0) {
             kernel_size = load_uimage(kernel_filename,
                                       &entry, NULL, NULL, NULL, NULL);
@@ -91,7 +133,7 @@ static void cpu_openrisc_load_kernel(ram_addr_t ram_size,
                     kernel_filename);
             exit(1);
         }
-        cpu->env.pc = entry;
+        boot_info.bootstrap_pc = entry;
     }
 }
 
@@ -102,6 +144,8 @@ static void openrisc_sim_init(MachineState *machine)
     const char *kernel_filename = machine->kernel_filename;
     OpenRISCCPU *cpu = NULL;
     MemoryRegion *ram;
+    qemu_irq *cpu_irqs[2];
+    qemu_irq serial_irq;
     int n;
 
     if (!cpu_model) {
@@ -110,37 +154,50 @@ static void openrisc_sim_init(MachineState *machine)
 
     for (n = 0; n < smp_cpus; n++) {
         cpu = cpu_openrisc_init(cpu_model);
+        cpu->env.coreid = n;
+        cpu->env.numcores = smp_cpus;
+
         if (cpu == NULL) {
             fprintf(stderr, "Unable to find CPU definition!\n");
             exit(1);
         }
+        cpu_openrisc_pic_init(cpu);
+        cpu_irqs[n] = (qemu_irq*) cpu->env.irq;
+
+        cpu_openrisc_clock_init(cpu);
+
         qemu_register_reset(main_cpu_reset, cpu);
-        main_cpu_reset(cpu);
     }
 
     ram = g_malloc(sizeof(*ram));
     memory_region_init_ram(ram, NULL, "openrisc.ram", ram_size, &error_fatal);
     memory_region_add_subregion(get_system_memory(), 0, ram);
 
-    cpu_openrisc_pic_init(cpu);
-    cpu_openrisc_clock_init(cpu);
-
-    serial_mm_init(get_system_memory(), 0x90000000, 0, cpu->env.irq[2],
-                   115200, serial_hds[0], DEVICE_NATIVE_ENDIAN);
-
     if (nd_table[0].used) {
-        openrisc_sim_net_init(get_system_memory(), 0x92000000,
-                              0x92000400, cpu->env.irq[4], nd_table);
+        openrisc_sim_net_init(0x92000000, 0x92000400, smp_cpus,
+                              cpu_irqs, 4, nd_table);
     }
 
-    cpu_openrisc_load_kernel(ram_size, kernel_filename, cpu);
+    if (smp_cpus > 1) {
+        openrisc_sim_ompic_init(0x98000000, smp_cpus, cpu_irqs, 1);
+        openrisc_sim_omtimer_init(0x99000000);
+
+        serial_irq = qemu_irq_split(cpu_irqs[0][2], cpu_irqs[1][2]);
+    } else {
+        serial_irq = cpu_irqs[0][2];
+    }
+
+    serial_mm_init(get_system_memory(), 0x90000000, 0, serial_irq,
+                   115200, serial_hds[0], DEVICE_NATIVE_ENDIAN);
+
+    openrisc_load_kernel(ram_size, kernel_filename);
 }
 
 static void openrisc_sim_machine_init(MachineClass *mc)
 {
     mc->desc = "or1k simulation";
     mc->init = openrisc_sim_init;
-    mc->max_cpus = 1;
+    mc->max_cpus = 2;
     mc->is_default = 1;
 }
 
