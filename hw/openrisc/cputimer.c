@@ -25,33 +25,31 @@
 
 #define TIMER_PERIOD 50 /* 50 ns period for 20 MHz timer */
 
-/* The time when TTCR changes */
-static uint64_t last_clk;
-static int is_counting;
-
+/* Add elapsed ticks to ttcr */
 void cpu_openrisc_count_update(OpenRISCCPU *cpu)
 {
     uint64_t now;
 
-    if (!is_counting) {
+    if (!cpu->env.is_counting) {
         return;
     }
     now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
-    cpu->env.ttcr += (uint32_t)((now - last_clk) / TIMER_PERIOD);
-    last_clk = now;
+    cpu->env.ttcr += (uint32_t)((now - cpu->env.last_clk) / TIMER_PERIOD);
+    cpu->env.last_clk = now;
 }
 
+/* Update the next timeout time as difference between ttmr and ttcr */
 void cpu_openrisc_timer_update(OpenRISCCPU *cpu)
 {
     uint32_t wait;
     uint64_t now, next;
 
-    if (!is_counting) {
+    if (!cpu->env.is_counting) {
         return;
     }
 
     cpu_openrisc_count_update(cpu);
-    now = last_clk;
+    now = cpu->env.last_clk;
 
     if ((cpu->env.ttmr & TTMR_TP) <= (cpu->env.ttcr & TTMR_TP)) {
         wait = TTMR_TP - (cpu->env.ttcr & TTMR_TP) + 1;
@@ -66,7 +64,7 @@ void cpu_openrisc_timer_update(OpenRISCCPU *cpu)
 
 void cpu_openrisc_count_start(OpenRISCCPU *cpu)
 {
-    is_counting = 1;
+    cpu->env.is_counting = 1;
     cpu_openrisc_count_update(cpu);
 }
 
@@ -74,7 +72,7 @@ void cpu_openrisc_count_stop(OpenRISCCPU *cpu)
 {
     timer_del(cpu->env.timer);
     cpu_openrisc_count_update(cpu);
-    is_counting = 0;
+    cpu->env.is_counting = 0;
 }
 
 static void openrisc_timer_cb(void *opaque)

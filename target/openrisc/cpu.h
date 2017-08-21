@@ -316,6 +316,8 @@ typedef struct CPUOpenRISCState {
     QEMUTimer *timer;
     uint32_t ttmr;          /* Timer tick mode register */
     uint32_t ttcr;          /* Timer tick count register */
+    uint64_t last_clk;      /* The time when TTCR changed */
+    int is_counting;
 
     uint32_t picmr;         /* Interrupt mask register */
     uint32_t picsr;         /* Interrupt contrl register*/
