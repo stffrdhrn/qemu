@@ -286,9 +286,9 @@ static ssize_t liteeth_rx(NetClientState *nc, const uint8_t *buf, size_t size)
 
 
     tmpsize = (size < 60)?60:size;
-    s->regs[R_ETHMAC_SRAM_WRITER_LENGTH0] = (tmpsize << 24 ) & 0xff;
-    s->regs[R_ETHMAC_SRAM_WRITER_LENGTH1] = (tmpsize << 16 ) & 0xff;
-    s->regs[R_ETHMAC_SRAM_WRITER_LENGTH2] = (tmpsize << 8 ) & 0xff;
+    s->regs[R_ETHMAC_SRAM_WRITER_LENGTH0] = (tmpsize >> 24 ) & 0xff;
+    s->regs[R_ETHMAC_SRAM_WRITER_LENGTH1] = (tmpsize >> 16 ) & 0xff;
+    s->regs[R_ETHMAC_SRAM_WRITER_LENGTH2] = (tmpsize >> 8 ) & 0xff;
     s->regs[R_ETHMAC_SRAM_WRITER_LENGTH3] = tmpsize & 0xff;
     s->regs[R_ETHMAC_SRAM_WRITER_EV_PENDING] =  1;
 
