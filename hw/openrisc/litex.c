@@ -60,7 +60,6 @@ static void main_cpu_reset(void *opaque)
 static void
 litex_init(MachineState *machine)
 {
-    const char *cpu_model = machine->cpu_model;
     const char *kernel_filename = machine->kernel_filename;
 
     OpenRISCCPU *cpu;
@@ -69,13 +68,9 @@ litex_init(MachineState *machine)
     ResetInfo *reset_info;
     reset_info = g_malloc0(sizeof(ResetInfo));
 
-    if (cpu_model == NULL) {
-        cpu_model = "or1200";
-    }
-
-    cpu = cpu_openrisc_init(cpu_model);
+    cpu = OPENRISC_CPU(cpu_create(machine->cpu_type));
     if (cpu == NULL) {
-        fprintf(stderr, "qemu: unable to find CPU '%s'\n", cpu_model);
+        fprintf(stderr, "qemu: unable to find CPU definition!\n");
         exit(1);
     }
     qemu_register_reset(main_cpu_reset, reset_info);
@@ -113,6 +108,7 @@ static void litex_machine_init(MachineClass *mc)
     mc->desc = "Litex One";
     mc->init = litex_init;
     mc->is_default = 0;
+    mc->default_cpu_type = OPENRISC_CPU_TYPE_NAME("or1200");
 }
 
 DEFINE_MACHINE("litex", litex_machine_init)
