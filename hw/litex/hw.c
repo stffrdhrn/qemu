@@ -221,18 +221,8 @@ void litex_create_memory(MemoryRegion *address_space_mem, qemu_irq irqs[])
 
         spi_bus = (SSIBus *)qdev_get_child_bus(spi_master, "ssi");
 
-        if (dinfo) {
-            if (!dinfo->serial) {
-                printf("Set serial value to flash type (m25p16, etc)\n");
-                abort();
-            } else {
-                printf("Using spiflash type %s\n", dinfo->serial);
-            }
-            spi_flash = ssi_create_slave_no_init(spi_bus, dinfo->serial);
-            qdev_prop_set_drive(spi_flash, "drive", blk_by_legacy_dinfo(dinfo), &error_abort);
-        } else {
-            spi_flash = ssi_create_slave_no_init(spi_bus, "m25p80");
-        }
+        spi_flash = ssi_create_slave_no_init(spi_bus, "m25p80");
+        qdev_prop_set_drive(spi_flash, "drive", blk_by_legacy_dinfo(dinfo), &error_abort);
         qdev_init_nofail(spi_flash);
 
         cs_line = qdev_get_gpio_in_named(spi_flash, SSI_GPIO_CS, 0);
