@@ -23,7 +23,7 @@
 #include "hw/hw.h"
 #include "hw/sysbus.h"
 #include "trace.h"
-#include "sysemu/char.h"
+#include "chardev/char-fe.h"
 #include "qemu/error-report.h"
 
 
@@ -273,7 +273,8 @@ static void litex_uart_realize(DeviceState *dev, Error **errp)
 {
 
       LitexUartState *s = LITEX_UART(dev);
-      qemu_chr_fe_set_handlers(&s->chr, uart_can_rx, uart_rx,  uart_event, s, NULL, true);
+      qemu_chr_fe_set_handlers(&s->chr, uart_can_rx, uart_rx,  uart_event,
+                               NULL, s, NULL, true);
 
       //printf("litex uart realize\n");
 }
