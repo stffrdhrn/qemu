@@ -501,7 +501,8 @@ static int liteeth_init(SysBusDevice *sbd)
     mdio_create_slave(s->mdio_bus, "88e1116r", 0x0);
 
     /* register buffers memory */
-    memory_region_init_ram(&s->buffers, OBJECT(dev), "liteeth.buffers", buffers_size, &error_fatal);
+    memory_region_init_ram_nomigrate(&s->buffers, OBJECT(dev), "liteeth.buffers",
+                                     buffers_size, &error_fatal);
     vmstate_register_ram_global(&s->buffers);
     s->rx0_buf = memory_region_get_ram_ptr(&s->buffers);
     s->rx1_buf = s->rx0_buf + LITEETH_BUFFER_SIZE;
