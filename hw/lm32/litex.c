@@ -73,7 +73,6 @@ static void main_cpu_reset(void *opaque)
 static void
 litex_init(MachineState *machine)
 {
-    const char *cpu_model = machine->cpu_model;
     const char *kernel_filename = machine->kernel_filename;
 
     LM32CPU *cpu;
@@ -87,12 +86,9 @@ litex_init(MachineState *machine)
 
     reset_info = g_malloc0(sizeof(ResetInfo));
 
-    if (cpu_model == NULL) {
-        cpu_model = "lm32-full";
-    }
-    cpu = cpu_lm32_init(cpu_model);
+    cpu = LM32_CPU(cpu_create(machine->cpu_type));
     if (cpu == NULL) {
-        fprintf(stderr, "qemu: unable to find CPU '%s'\n", cpu_model);
+        fprintf(stderr, "qemu: unable to find CPU definition!\n");
         exit(1);
     }
 
@@ -111,7 +107,7 @@ litex_init(MachineState *machine)
     cpu_lm32_set_phys_msb_ignore(env, 1);
 
     /* make sure juart isn't the first chardev */
-    env->juart_state = lm32_juart_init(serial_hds[1]);
+    env->juart_state = lm32_juart_init(serial_hd(1));
 
     if (kernel_filename) {
         uint64_t entry;
@@ -135,6 +131,7 @@ static void litex_machine_init(MachineClass *mc)
     mc->desc = "Litex One";
     mc->init = litex_init;
     mc->is_default = 0;
+    mc->default_cpu_type = LM32_CPU_TYPE_NAME("lm32-full");
 }
 
 DEFINE_MACHINE("litex", litex_machine_init)
