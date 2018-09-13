@@ -15,6 +15,7 @@
 #include "sysemu/blockdev.h"
 #include "sysemu/sysemu.h"
 
+#include "hw/ssi/litex_ssi.h"
 #include "hw/litex/hw.h"
 #include "generated/csr.h"
 #include "generated/mem.h"
@@ -214,14 +215,19 @@ void litex_create_memory(MemoryRegion *address_space_mem, qemu_irq irqs[])
         DeviceState *spi_flash;
         SSIBus *spi_bus;
         qemu_irq cs_line;
+        const char *spiflashtype = "m25p80";
 
-        spi_master = qdev_create(NULL, "litex_ssi");
+        spi_master = qdev_create(NULL, TYPE_LITEX_SSI);
         qdev_init_nofail(spi_master);
         sysbus_mmio_map(SYS_BUS_DEVICE(spi_master), 0, CSR_SPIFLASH_BASE & MEM_MASK);
 
+        if (LITEX_SSI(spi_master)->spiflash != NULL) {
+            spiflashtype = LITEX_SSI(spi_master)->spiflash;
+        }
+
         spi_bus = (SSIBus *)qdev_get_child_bus(spi_master, "ssi");
 
-        spi_flash = ssi_create_slave_no_init(spi_bus, "m25p80");
+        spi_flash = ssi_create_slave_no_init(spi_bus, spiflashtype);
         qdev_prop_set_drive(spi_flash, "drive", blk_by_legacy_dinfo(dinfo), &error_abort);
         qdev_init_nofail(spi_flash);
 

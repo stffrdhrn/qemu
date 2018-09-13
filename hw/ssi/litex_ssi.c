@@ -27,15 +27,13 @@
 #include "bitbang_ssi.h"
 #include "qemu/log.h"
 
-#define TYPE_LITEX_SSI "litex_ssi"
-#define LITEX_SSI(obj) \
-    OBJECT_CHECK(LiteXSSIState, (obj), TYPE_LITEX_SSI)
+#include "hw/ssi/litex_ssi.h"
 
 enum {
     R_SPIFLASH_BITBANG,
     R_SPIFLASH_MISO,
     R_SPIFLASH_BITBANG_EN,
-    R_MAX,
+    /* LITEX_SSI_R_MAX */
 };
 
 #define SSI_MOSI    0x01
@@ -45,21 +43,11 @@ enum {
 
 #define SSI_MISO    0x01
 
-typedef struct LiteXSSIState {
-    SysBusDevice parent_obj;
-
-    MemoryRegion iomem;
-    bitbang_ssi_interface *bitbang;
-    uint32_t regs[R_MAX];
-
-    qemu_irq cs_n;
-} LiteXSSIState;
-
 static uint64_t litex_ssi_read(void *opaque, hwaddr addr, unsigned size)
 {
     LiteXSSIState *s = (LiteXSSIState *)opaque;
     addr >>= 2;
-    if (addr >= R_MAX) {
+    if (addr >= LITEX_SSI_R_MAX) {
         printf("Tried to access invalid address %08x\n", (unsigned int)addr);
         return 0;
     }
@@ -73,7 +61,7 @@ static void litex_ssi_write(void *opaque, hwaddr addr, uint64_t value, unsigned 
     LiteXSSIState *s = (LiteXSSIState *)opaque;
     addr >>= 2;
 
-    if (addr >= R_MAX) {
+    if (addr >= LITEX_SSI_R_MAX) {
         printf("Tried to access invalid address %08x\n", (unsigned int)addr);
         return;
     }
@@ -119,15 +107,41 @@ static void litex_ssi_init(Object *obj)
 
     bus = ssi_create_bus(dev, "ssi");
     s->bitbang = bitbang_ssi_init(bus, BITBANG_SSI_CPOL0, BITBANG_SSI_CPHA0, 8);
-    memory_region_init_io(&s->iomem, OBJECT(dev), &litex_ssi_ops, s, "litex_ssi", R_MAX * 4);
+    memory_region_init_io(&s->iomem, OBJECT(dev), &litex_ssi_ops, s, "litex_ssi",
+                          LITEX_SSI_R_MAX * 4);
     sysbus_init_mmio(sbd, &s->iomem);
 
     qdev_init_gpio_out_named(dev, &(s->cs_n), SSI_GPIO_CS, 1);
 }
 
+static const VMStateDescription vmstate_litex_ssi = {
+    .name = "litex_ssi",
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]) {
+        VMSTATE_UINT32_ARRAY(regs, LiteXSSIState, LITEX_SSI_R_MAX),
+        VMSTATE_END_OF_LIST()
+    }
+};
+
+static Property litex_ssi_properties[] = {
+    DEFINE_PROP_STRING("spiflash", LiteXSSIState, spiflash),
+    DEFINE_PROP_END_OF_LIST(),
+};
+
+
+static void litex_ssi_class_init(ObjectClass *klass, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(klass);
+
+    dc->props = litex_ssi_properties;
+    dc->vmsd = &vmstate_litex_ssi;
+}
+
 static const TypeInfo litex_ssi_info = {
     .name          = TYPE_LITEX_SSI,
     .parent        = TYPE_SYS_BUS_DEVICE,
+    .class_init    = litex_ssi_class_init,
     .instance_size = sizeof(LiteXSSIState),
     .instance_init = litex_ssi_init,
 };
