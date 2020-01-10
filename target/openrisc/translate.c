@@ -880,22 +880,15 @@ static bool trans_l_mfspr(DisasContext *dc, arg_l_mfspr *a)
 {
     check_r0_write(dc, a->d);
 
-    if (is_user(dc)) {
-        gen_illegal_exception(dc);
-    } else {
         TCGv spr = tcg_temp_new();
         tcg_gen_ori_tl(spr, cpu_R(dc, a->a), a->k);
         gen_helper_mfspr(cpu_R(dc, a->d), cpu_env, cpu_R(dc, a->d), spr);
         tcg_temp_free(spr);
-    }
     return true;
 }
 
 static bool trans_l_mtspr(DisasContext *dc, arg_l_mtspr *a)
 {
-    if (is_user(dc)) {
-        gen_illegal_exception(dc);
-    } else {
         TCGv spr;
 
         /* For SR, we will need to exit the TB to recognize the new
@@ -915,7 +908,6 @@ static bool trans_l_mtspr(DisasContext *dc, arg_l_mtspr *a)
         tcg_gen_ori_tl(spr, cpu_R(dc, a->a), a->k);
         gen_helper_mtspr(cpu_env, spr, cpu_R(dc, a->b));
         tcg_temp_free(spr);
-    }
     return true;
 }
 
