@@ -12006,8 +12006,20 @@ static abi_long do_syscall1(void *cpu_env, int num, abi_long arg1,
 #endif
 
     /* Not implemented for now... */
-/*     case TARGET_NR_mq_notify: */
-/*         break; */
+    case TARGET_NR_mq_notify:
+        {
+            struct sigevent host_sevp = { {0}, }, *phost_sevp = NULL;
+            ret = 0;
+            if (arg2 != 0) {
+                phost_sevp = &host_sevp;
+                ret = target_to_host_sigevent(phost_sevp, arg2);
+                if (ret == 0) {
+                    ret = get_errno(mq_notify(arg1, phost_sevp));
+                }
+            }
+        }
+        return ret;
+
 
     case TARGET_NR_mq_getsetattr:
         {
