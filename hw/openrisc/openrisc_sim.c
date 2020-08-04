@@ -20,6 +20,7 @@
 
 #include "qemu/osdep.h"
 #include "qemu/error-report.h"
+#include "qemu/units.h"
 #include "qapi/error.h"
 #include "cpu.h"
 #include "hw/irq.h"
@@ -123,6 +124,37 @@ static void openrisc_load_kernel(ram_addr_t ram_size,
     }
 }
 
+static void openrisc_load_initrd(const char *filename, uint64_t mem_size)
+{
+    int size;
+    hwaddr start;
+
+    /*
+     * We want to put the initrd far enough into RAM that when the
+     * kernel is uncompressed it will not clobber the initrd. However
+     * on boards without much RAM we must ensure that we still leave
+     * enough room for a decent sized initrd, and on boards with large
+     * amounts of RAM we must avoid the initrd being so far up in RAM
+     * that it is outside lowmem and inaccessible to the kernel.
+     * So for boards with less  than 256MB of RAM we put the initrd
+     * halfway into RAM, and for boards with 256MB of RAM or more we put
+     * the initrd at 128MB.
+     */
+    start = boot_info.bootstrap_pc + MIN(mem_size / 2, 128 * MiB);
+
+    size = load_ramdisk(filename, start, mem_size - start);
+    if (size == -1) {
+        size = load_image_targphys(filename, start, mem_size - start);
+        if (size == -1) {
+            error_report("could not load ramdisk '%s'", filename);
+            exit(1);
+        }
+    }
+
+    fprintf (stderr, "Loaded initrd to start=0x%08lx, end=0x%08lx\n", start,
+            start + size);
+}
+
 static void openrisc_sim_init(MachineState *machine)
 {
     ram_addr_t ram_size = machine->ram_size;
@@ -169,7 +201,14 @@ static void openrisc_sim_init(MachineState *machine)
     serial_mm_init(get_system_memory(), 0x90000000, 0, serial_irq,
                    115200, serial_hd(0), DEVICE_NATIVE_ENDIAN);
 
-    openrisc_load_kernel(ram_size, kernel_filename);
+    if (kernel_filename) {
+        openrisc_load_kernel(ram_size, kernel_filename);
+fprintf (stderr, "loading initram %s\n", machine->initrd_filename);
+        if (machine->initrd_filename) {
+            openrisc_load_initrd(machine->initrd_filename,
+                                 machine->ram_size);
+        }
+    }
 }
 
 static void openrisc_sim_machine_init(MachineClass *mc)
