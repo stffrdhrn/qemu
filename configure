@@ -8193,6 +8193,7 @@ case "$target_name" in
   or1k)
     TARGET_ARCH=openrisc
     TARGET_BASE_ARCH=openrisc
+    mttcg=yes
   ;;
   ppc)
     gdb_xml_files="power-core.xml power-fpu.xml power-altivec.xml power-spe.xml"

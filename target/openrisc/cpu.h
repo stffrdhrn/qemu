@@ -23,6 +23,8 @@
 #include "exec/cpu-defs.h"
 #include "hw/core/cpu.h"
 
+#define TCG_GUEST_DEFAULT_MO 0
+
 /* cpu_openrisc_map_address_* in CPUOpenRISCTLBContext need this decl.  */
 struct OpenRISCCPU;
 
@@ -292,6 +294,8 @@ typedef struct CPUOpenRISCState {
     QEMUTimer *timer;
     uint32_t ttmr;          /* Timer tick mode register */
     int is_counting;
+    uint32_t ttcr;
+    uint64_t last_clk;
 
     uint32_t picmr;         /* Interrupt mask register */
     uint32_t picsr;         /* Interrupt contrl register*/

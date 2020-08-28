@@ -35,12 +35,12 @@ static OR1KTimerState *or1k_timer;
 
 void cpu_openrisc_count_set(OpenRISCCPU *cpu, uint32_t val)
 {
-    or1k_timer->ttcr = val;
+    cpu->env.ttcr = val;
 }
 
 uint32_t cpu_openrisc_count_get(OpenRISCCPU *cpu)
 {
-    return or1k_timer->ttcr;
+    return cpu->env.ttcr;
 }
 
 /* Add elapsed ticks to ttcr */
@@ -52,9 +52,9 @@ void cpu_openrisc_count_update(OpenRISCCPU *cpu)
         return;
     }
     now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
-    or1k_timer->ttcr += (uint32_t)((now - or1k_timer->last_clk)
-                                    / TIMER_PERIOD);
-    or1k_timer->last_clk = now;
+    cpu->env.ttcr += (uint32_t)((now - cpu->env.last_clk)
+                                / TIMER_PERIOD);
+    cpu->env.last_clk = now;
 }
 
 /* Update the next timeout time as difference between ttmr and ttcr */
@@ -68,13 +68,13 @@ void cpu_openrisc_timer_update(OpenRISCCPU *cpu)
     }
 
     cpu_openrisc_count_update(cpu);
-    now = or1k_timer->last_clk;
+    now = cpu->env.last_clk;
 
-    if ((cpu->env.ttmr & TTMR_TP) <= (or1k_timer->ttcr & TTMR_TP)) {
-        wait = TTMR_TP - (or1k_timer->ttcr & TTMR_TP) + 1;
+    if ((cpu->env.ttmr & TTMR_TP) <= (cpu->env.ttcr & TTMR_TP)) {
+        wait = TTMR_TP - (cpu->env.ttcr & TTMR_TP) + 1;
         wait += cpu->env.ttmr & TTMR_TP;
     } else {
-        wait = (cpu->env.ttmr & TTMR_TP) - (or1k_timer->ttcr & TTMR_TP);
+        wait = (cpu->env.ttmr & TTMR_TP) - (cpu->env.ttcr & TTMR_TP);
     }
     next = now + (uint64_t)wait * TIMER_PERIOD;
     timer_mod(cpu->env.timer, next);
@@ -109,7 +109,7 @@ static void openrisc_timer_cb(void *opaque)
     case TIMER_NONE:
         break;
     case TIMER_INTR:
-        or1k_timer->ttcr = 0;
+        cpu_openrisc_count_set(cpu, 0);
         break;
     case TIMER_SHOT:
         cpu_openrisc_count_stop(cpu);
@@ -137,6 +137,7 @@ void cpu_openrisc_clock_init(OpenRISCCPU *cpu)
 {
     cpu->env.timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, &openrisc_timer_cb, cpu);
     cpu->env.ttmr = 0x00000000;
+    cpu->env.ttcr = 0x00000000;
 
     if (or1k_timer == NULL) {
         or1k_timer = g_new0(OR1KTimerState, 1);
