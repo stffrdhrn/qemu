@@ -79,7 +79,11 @@ static int get_phys_mmu(OpenRISCCPU *cpu, hwaddr *phys_addr, int *prot,
     *prot = right;
 
     qemu_log_mask(CPU_LOG_MMU,
-                  "MMU lookup: need %d match %d valid %d right %d -> %s\n",
+                  "CPU %d: "
+                  "MMU lookup: addr " TARGET_FMT_lx " idx %d"
+                  " need %d match %d valid %d right %d -> %s\n",
+                  CPU(cpu)->cpu_index,
+                  addr, idx,
                   need, match, valid, right, (need & right) ? "OK" : "FAIL");
 
     /* Check the collective permissions are present.  */
