@@ -302,10 +302,17 @@ static void openrisc_virt_rtc_init(OR1KVirtState *state, hwaddr base,
 {
     void *fdt = state->fdt;
     char *nodename;
+    DeviceState *dev;
+    SysBusDevice *sysbus;
     qemu_irq rtc_irq = get_per_cpu_irq(cpus, num_cpus, irq_pin);
 
     /* Goldfish RTC */
-    sysbus_create_simple(TYPE_GOLDFISH_RTC, base, rtc_irq);
+    dev = qdev_new(TYPE_GOLDFISH_RTC);
+    qdev_prop_set_uint8(dev, "endianness", DEVICE_LITTLE_ENDIAN);
+    sysbus = SYS_BUS_DEVICE(dev);
+    sysbus_realize_and_unref(sysbus, &error_fatal);
+    sysbus_connect_irq(sysbus, 0, rtc_irq);
+    sysbus_mmio_map(sysbus, 0, base);
 
     /* Goldfish RTC FDT */
     nodename = g_strdup_printf("/soc/rtc@%" HWADDR_PRIx, base);
