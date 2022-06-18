@@ -205,8 +205,10 @@ enum {
 
 /* TLB size */
 enum {
-    TLB_SIZE = 128,
-    TLB_MASK = TLB_SIZE - 1,
+    TLB_WAYS = 4,
+    TLB_SETS = 128,
+    TLB_SIZE = TLB_WAYS * TLB_SETS,
+    TLB_MASK = TLB_SETS - 1,
 };
 
 /* TLB prot */

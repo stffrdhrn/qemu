@@ -157,11 +157,11 @@ static void or1200_initfn(Object *obj)
     cpu->env.cpucfgr = CPUCFGR_NSGF | CPUCFGR_OB32S | CPUCFGR_OF32S |
                        CPUCFGR_EVBARP;
 
-    /* 1Way, TLB_SIZE entries.  */
-    cpu->env.dmmucfgr = (DMMUCFGR_NTW & (0 << 2))
-                      | (DMMUCFGR_NTS & (ctz32(TLB_SIZE) << 2));
-    cpu->env.immucfgr = (IMMUCFGR_NTW & (0 << 2))
-                      | (IMMUCFGR_NTS & (ctz32(TLB_SIZE) << 2));
+    /* TLB_WAYS Ways, TLB_SETS entries.  */
+    cpu->env.dmmucfgr = (DMMUCFGR_NTW & (TLB_WAYS - 1))
+                      | (DMMUCFGR_NTS & (ctz32(TLB_SETS) << 2));
+    cpu->env.immucfgr = (IMMUCFGR_NTW & (TLB_WAYS - 1))
+                      | (IMMUCFGR_NTS & (ctz32(TLB_SETS) << 2));
 }
 
 static void openrisc_any_initfn(Object *obj)
@@ -176,11 +176,11 @@ static void openrisc_any_initfn(Object *obj)
     cpu->env.cpucfgr = CPUCFGR_NSGF | CPUCFGR_OB32S | CPUCFGR_OF32S |
                        CPUCFGR_AVRP | CPUCFGR_EVBARP | CPUCFGR_OF64A32S;
 
-    /* 1Way, TLB_SIZE entries.  */
-    cpu->env.dmmucfgr = (DMMUCFGR_NTW & (0 << 2))
-                      | (DMMUCFGR_NTS & (ctz32(TLB_SIZE) << 2));
-    cpu->env.immucfgr = (IMMUCFGR_NTW & (0 << 2))
-                      | (IMMUCFGR_NTS & (ctz32(TLB_SIZE) << 2));
+    /* TLB_WAYS Ways, TLB_SETS entries.  */
+    cpu->env.dmmucfgr = (DMMUCFGR_NTW & (TLB_WAYS - 1))
+                      | (DMMUCFGR_NTS & (ctz32(TLB_SETS) << 2));
+    cpu->env.immucfgr = (IMMUCFGR_NTW & (TLB_WAYS - 1))
+                      | (IMMUCFGR_NTS & (ctz32(TLB_SETS) << 2));
 }
 
 #ifndef CONFIG_USER_ONLY

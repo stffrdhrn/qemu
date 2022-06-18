@@ -26,6 +26,40 @@
 #include "qemu/host-utils.h"
 #include "hw/loader.h"
 
+static void lookup_tlb_entries(OpenRISCCPU *cpu, int idx,
+                               uint32_t *imr, uint32_t *itr,
+                               uint32_t *dmr, uint32_t *dtr,
+                               target_ulong vaddr)
+{
+    int way;
+    int entry;
+    uint32_t mr;
+
+    *imr = 0;
+    *itr = 0;
+    for (way = 0; way < TLB_WAYS; way++) {
+        entry = (way * TLB_SETS) + idx;
+        mr = cpu->env.tlb.itlb[entry].mr;
+        if ((mr & 1) && !((mr ^ vaddr) & TARGET_PAGE_MASK)) {
+            *imr = mr;
+            *itr = cpu->env.tlb.itlb[entry].tr;
+            break;
+        }
+    }
+
+    *dmr = 0;
+    *dtr = 0;
+    for (way = 0; way < TLB_WAYS; way++) {
+        entry = (way * TLB_SETS) + idx;
+        mr = cpu->env.tlb.dtlb[entry].mr;
+        if ((mr & 1) && !((mr ^ vaddr) & TARGET_PAGE_MASK)) {
+            *dmr = mr;
+            *dtr = cpu->env.tlb.dtlb[entry].tr;
+            break;
+        }
+    }
+}
+
 static inline void get_phys_nommu(hwaddr *phys_addr, int *prot,
                                   target_ulong address)
 {
@@ -37,31 +71,14 @@ static int get_phys_mmu(OpenRISCCPU *cpu, hwaddr *phys_addr, int *prot,
                         target_ulong addr, int need, bool super)
 {
     int idx = (addr >> TARGET_PAGE_BITS) & TLB_MASK;
-    uint32_t imr = cpu->env.tlb.itlb[idx].mr;
-    uint32_t itr = cpu->env.tlb.itlb[idx].tr;
-    uint32_t dmr = cpu->env.tlb.dtlb[idx].mr;
-    uint32_t dtr = cpu->env.tlb.dtlb[idx].tr;
-    int right, match, valid;
+    uint32_t imr, itr, dmr, dtr;
+    int right, valid;
 
-    /* If the ITLB and DTLB indexes map to the same page, we want to
-       load all permissions all at once.  If the destination pages do
-       not match, zap the one we don't need.  */
-    if (unlikely((itr ^ dtr) & TARGET_PAGE_MASK)) {
-        if (need & PAGE_EXEC) {
-            dmr = dtr = 0;
-        } else {
-            imr = itr = 0;
-        }
-    }
-
-    /* Check if either of the entries matches the source address.  */
-    match  = (imr ^ addr) & TARGET_PAGE_MASK ? 0 : PAGE_EXEC;
-    match |= (dmr ^ addr) & TARGET_PAGE_MASK ? 0 : PAGE_READ | PAGE_WRITE;
+    lookup_tlb_entries(cpu, idx, &imr, &itr, &dmr, &dtr, addr);
 
     /* Check if either of the entries is valid.  */
     valid  = imr & 1 ? PAGE_EXEC : 0;
     valid |= dmr & 1 ? PAGE_READ | PAGE_WRITE : 0;
-    valid &= match;
 
     /* Collect the permissions from the entries.  */
     right  = itr & (super ? SXE : UXE) ? PAGE_EXEC : 0;
@@ -77,8 +94,9 @@ static int get_phys_mmu(OpenRISCCPU *cpu, hwaddr *phys_addr, int *prot,
     *prot = right;
 
     qemu_log_mask(CPU_LOG_MMU,
-                  "MMU lookup: need %d match %d valid %d right %d -> %s\n",
-                  need, match, valid, right, (need & right) ? "OK" : "FAIL");
+                  "MMU lookup: %03d %x need %d valid %d right %d -> %s\n",
+                  idx, addr & TARGET_PAGE_MASK,
+                  need, valid, right, (need & right) ? "OK" : "FAIL");
 
     /* Check the collective permissions are present.  */
     if (likely(need & right)) {

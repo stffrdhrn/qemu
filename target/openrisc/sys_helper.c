@@ -19,6 +19,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/log.h"
 #include "cpu.h"
 #include "exec/exec-all.h"
 #include "exec/helper-proto.h"
@@ -29,12 +30,48 @@
 
 #define TO_SPR(group, number) (((group) << 11) + (number))
 
+#ifndef CONFIG_USER_ONLY
+static int openrisc_tlb_entry(int way, int idx)
+{
+    return (way * TLB_SETS) + idx;
+}
+
+static void update_itlb_mr(CPUOpenRISCState *env, int entry, target_ulong rb)
+{
+    CPUState *cs = env_cpu(env);
+    target_ulong mr;
+
+    mr = env->tlb.itlb[entry].mr;
+    if (mr & 1) {
+        tlb_flush_page(cs, mr & TARGET_PAGE_MASK);
+    }
+    if (rb & 1) {
+        tlb_flush_page(cs, rb & TARGET_PAGE_MASK);
+    }
+    env->tlb.itlb[entry].mr = rb;
+}
+
+static void update_dtlb_mr(CPUOpenRISCState *env, int entry, target_ulong rb)
+{
+    CPUState *cs = env_cpu(env);
+    target_ulong mr;
+
+    mr = env->tlb.dtlb[entry].mr;
+    if (mr & 1) {
+        tlb_flush_page(cs, mr & TARGET_PAGE_MASK);
+    }
+    if (rb & 1) {
+        tlb_flush_page(cs, rb & TARGET_PAGE_MASK);
+    }
+    env->tlb.dtlb[entry].mr = rb;
+}
+#endif
+
 void HELPER(mtspr)(CPUOpenRISCState *env, target_ulong spr, target_ulong rb)
 {
 #ifndef CONFIG_USER_ONLY
     OpenRISCCPU *cpu = env_archcpu(env);
     CPUState *cs = env_cpu(env);
-    target_ulong mr;
     int idx;
 #endif
 
@@ -76,50 +113,70 @@ void HELPER(mtspr)(CPUOpenRISCState *env, target_ulong spr, target_ulong rb)
         env->shadow_gpr[idx / 32][idx % 32] = rb;
         break;
 
-    case TO_SPR(1, 512) ... TO_SPR(1, 512 + TLB_SIZE - 1): /* DTLBW0MR 0-127 */
+    case TO_SPR(1, 512) ... TO_SPR(1, 512 + TLB_SETS - 1): /* DTLBW0MR 0-127 */
         idx = spr - TO_SPR(1, 512);
-        mr = env->tlb.dtlb[idx].mr;
-        if (mr & 1) {
-            tlb_flush_page(cs, mr & TARGET_PAGE_MASK);
-        }
-        if (rb & 1) {
-            tlb_flush_page(cs, rb & TARGET_PAGE_MASK);
-        }
-        env->tlb.dtlb[idx].mr = rb;
+        update_dtlb_mr(env, openrisc_tlb_entry(0, idx), rb);
         break;
-    case TO_SPR(1, 640) ... TO_SPR(1, 640 + TLB_SIZE - 1): /* DTLBW0TR 0-127 */
+    case TO_SPR(1, 640) ... TO_SPR(1, 640 + TLB_SETS - 1): /* DTLBW0TR 0-127 */
         idx = spr - TO_SPR(1, 640);
-        env->tlb.dtlb[idx].tr = rb;
+        env->tlb.dtlb[openrisc_tlb_entry(0, idx)].tr = rb;
         break;
-    case TO_SPR(1, 768) ... TO_SPR(1, 895):   /* DTLBW1MR 0-127 */
-    case TO_SPR(1, 896) ... TO_SPR(1, 1023):  /* DTLBW1TR 0-127 */
-    case TO_SPR(1, 1024) ... TO_SPR(1, 1151): /* DTLBW2MR 0-127 */
-    case TO_SPR(1, 1152) ... TO_SPR(1, 1279): /* DTLBW2TR 0-127 */
-    case TO_SPR(1, 1280) ... TO_SPR(1, 1407): /* DTLBW3MR 0-127 */
-    case TO_SPR(1, 1408) ... TO_SPR(1, 1535): /* DTLBW3TR 0-127 */
+    case TO_SPR(1, 768) ... TO_SPR(1, 768 + TLB_SETS - 1):   /* DTLBW1MRn */
+        idx = spr - TO_SPR(1, 768);
+        update_dtlb_mr(env, openrisc_tlb_entry(1, idx), rb);
+        break;
+    case TO_SPR(1, 896) ... TO_SPR(1, 896 + TLB_SETS - 1):   /* DTLBW1TRn */
+        idx = spr - TO_SPR(1, 896);
+        env->tlb.dtlb[openrisc_tlb_entry(1, idx)].tr = rb;
+        break;
+    case TO_SPR(1, 1024) ... TO_SPR(1, 1024 + TLB_SETS - 1): /* DTLBW2MRn */
+        idx = spr - TO_SPR(1, 1024);
+        update_dtlb_mr(env, openrisc_tlb_entry(2, idx), rb);
+        break;
+    case TO_SPR(1, 1152) ... TO_SPR(1, 1152 + TLB_SETS - 1): /* DTLBW2TRn */
+        idx = spr - TO_SPR(1, 1152);
+        env->tlb.dtlb[openrisc_tlb_entry(2, idx)].tr = rb;
+        break;
+    case TO_SPR(1, 1280) ... TO_SPR(1, 1280 + TLB_SETS - 1): /* DTLBW3MRn */
+        idx = spr - TO_SPR(1, 1280);
+        update_dtlb_mr(env, openrisc_tlb_entry(3, idx), rb);
+        break;
+    case TO_SPR(1, 1408) ... TO_SPR(1, 1408 + TLB_SETS - 1): /* DTLBW3TRn */
+        idx = spr - TO_SPR(1, 1408);
+        env->tlb.dtlb[openrisc_tlb_entry(3, idx)].tr = rb;
         break;
 
-    case TO_SPR(2, 512) ... TO_SPR(2, 512 + TLB_SIZE - 1): /* ITLBW0MR 0-127 */
+    case TO_SPR(2, 512) ... TO_SPR(2, 512 + TLB_SETS - 1): /* ITLBW0MR 0-127 */
         idx = spr - TO_SPR(2, 512);
-        mr = env->tlb.itlb[idx].mr;
-        if (mr & 1) {
-            tlb_flush_page(cs, mr & TARGET_PAGE_MASK);
-        }
-        if (rb & 1) {
-            tlb_flush_page(cs, rb & TARGET_PAGE_MASK);
-        }
-        env->tlb.itlb[idx].mr = rb;
+        update_itlb_mr(env, openrisc_tlb_entry(0, idx), rb);
         break;
-    case TO_SPR(2, 640) ... TO_SPR(2, 640 + TLB_SIZE - 1): /* ITLBW0TR 0-127 */
+    case TO_SPR(2, 640) ... TO_SPR(2, 640 + TLB_SETS - 1): /* ITLBW0TR 0-127 */
         idx = spr - TO_SPR(2, 640);
-        env->tlb.itlb[idx].tr = rb;
+        env->tlb.itlb[openrisc_tlb_entry(0, idx)].tr = rb;
         break;
-    case TO_SPR(2, 768) ... TO_SPR(2, 895):   /* ITLBW1MR 0-127 */
-    case TO_SPR(2, 896) ... TO_SPR(2, 1023):  /* ITLBW1TR 0-127 */
-    case TO_SPR(2, 1024) ... TO_SPR(2, 1151): /* ITLBW2MR 0-127 */
-    case TO_SPR(2, 1152) ... TO_SPR(2, 1279): /* ITLBW2TR 0-127 */
-    case TO_SPR(2, 1280) ... TO_SPR(2, 1407): /* ITLBW3MR 0-127 */
-    case TO_SPR(2, 1408) ... TO_SPR(2, 1535): /* ITLBW3TR 0-127 */
+    case TO_SPR(2, 768) ... TO_SPR(2, 768 + TLB_SETS - 1):   /* ITLBW1MRn */
+        idx = spr - TO_SPR(2, 768);
+        update_itlb_mr(env, openrisc_tlb_entry(1, idx), rb);
+        break;
+    case TO_SPR(2, 896) ... TO_SPR(2, 896 + TLB_SETS - 1):   /* ITLBW1TRn */
+        idx = spr - TO_SPR(2, 896);
+        env->tlb.itlb[openrisc_tlb_entry(1, idx)].tr = rb;
+        break;
+    case TO_SPR(2, 1024) ... TO_SPR(2, 1024 + TLB_SETS - 1): /* ITLBW2MRn */
+        idx = spr - TO_SPR(2, 1024);
+        update_itlb_mr(env, openrisc_tlb_entry(2, idx), rb);
+        break;
+    case TO_SPR(2, 1152) ... TO_SPR(2, 1152 + TLB_SETS - 1): /* ITLBW2TRn */
+        idx = spr - TO_SPR(2, 1152);
+        env->tlb.itlb[openrisc_tlb_entry(2, idx)].tr = rb;
+        break;
+    case TO_SPR(2, 1280) ... TO_SPR(2, 1280 + TLB_SETS - 1): /* ITLBW3MRn */
+        idx = spr - TO_SPR(2, 1280);
+        update_itlb_mr(env, openrisc_tlb_entry(3, idx), rb);
+        break;
+    case TO_SPR(2, 1408) ... TO_SPR(2, 1408 + TLB_SETS - 1): /* ITLBW3TRn */
+        idx = spr - TO_SPR(2, 1408);
+        env->tlb.itlb[openrisc_tlb_entry(3, idx)].tr = rb;
         break;
 
     case TO_SPR(5, 1):  /* MACLO */
@@ -261,37 +318,55 @@ target_ulong HELPER(mfspr)(CPUOpenRISCState *env, target_ulong rd,
         idx = (spr - 1024);
         return env->shadow_gpr[idx / 32][idx % 32];
 
-    case TO_SPR(1, 512) ... TO_SPR(1, 512 + TLB_SIZE - 1): /* DTLBW0MR 0-127 */
+    case TO_SPR(1, 512) ... TO_SPR(1, 512 + TLB_SETS - 1): /* DTLBW0MR 0-127 */
         idx = spr - TO_SPR(1, 512);
-        return env->tlb.dtlb[idx].mr;
-
-    case TO_SPR(1, 640) ... TO_SPR(1, 640 + TLB_SIZE - 1): /* DTLBW0TR 0-127 */
+        return env->tlb.dtlb[openrisc_tlb_entry(0, idx)].mr;
+    case TO_SPR(1, 640) ... TO_SPR(1, 640 + TLB_SETS - 1): /* DTLBW0TR 0-127 */
         idx = spr - TO_SPR(1, 640);
-        return env->tlb.dtlb[idx].tr;
+        return env->tlb.dtlb[openrisc_tlb_entry(0, idx)].tr;
+    case TO_SPR(1, 768) ... TO_SPR(1, 768 + TLB_SETS - 1): /* DTLBW1MRn */
+        idx = spr - TO_SPR(1, 768);
+        return env->tlb.dtlb[openrisc_tlb_entry(1, idx)].mr;
+    case TO_SPR(1, 896) ... TO_SPR(1, 896 + TLB_SETS - 1): /* DTLBW1TRn */
+        idx = spr - TO_SPR(1, 896);
+        return env->tlb.dtlb[openrisc_tlb_entry(1, idx)].tr;
+    case TO_SPR(1, 1024) ... TO_SPR(1, 1024 + TLB_SETS - 1): /* DTLBW2MRn */
+        idx = spr - TO_SPR(1, 1024);
+        return env->tlb.dtlb[openrisc_tlb_entry(2, idx)].mr;
+    case TO_SPR(1, 1152) ... TO_SPR(1, 1152 + TLB_SETS - 1): /* DTLBW2TRn */
+        idx = spr - TO_SPR(1, 1152);
+        return env->tlb.dtlb[openrisc_tlb_entry(2, idx)].tr;
+    case TO_SPR(1, 1280) ... TO_SPR(1, 1280 + TLB_SETS - 1): /* DTLBW3MRn */
+        idx = spr - TO_SPR(1, 1280);
+        return env->tlb.dtlb[openrisc_tlb_entry(3, idx)].mr;
+    case TO_SPR(1, 1408) ... TO_SPR(1, 1408 + TLB_SETS - 1): /* DTLBW3TRn */
+        idx = spr - TO_SPR(1, 1408);
+        return env->tlb.dtlb[openrisc_tlb_entry(3, idx)].tr;
 
-    case TO_SPR(1, 768) ... TO_SPR(1, 895):   /* DTLBW1MR 0-127 */
-    case TO_SPR(1, 896) ... TO_SPR(1, 1023):  /* DTLBW1TR 0-127 */
-    case TO_SPR(1, 1024) ... TO_SPR(1, 1151): /* DTLBW2MR 0-127 */
-    case TO_SPR(1, 1152) ... TO_SPR(1, 1279): /* DTLBW2TR 0-127 */
-    case TO_SPR(1, 1280) ... TO_SPR(1, 1407): /* DTLBW3MR 0-127 */
-    case TO_SPR(1, 1408) ... TO_SPR(1, 1535): /* DTLBW3TR 0-127 */
-        break;
-
-    case TO_SPR(2, 512) ... TO_SPR(2, 512 + TLB_SIZE - 1): /* ITLBW0MR 0-127 */
+    case TO_SPR(2, 512) ... TO_SPR(2, 512 + TLB_SETS - 1): /* ITLBW0MR 0-127 */
         idx = spr - TO_SPR(2, 512);
-        return env->tlb.itlb[idx].mr;
-
-    case TO_SPR(2, 640) ... TO_SPR(2, 640 + TLB_SIZE - 1): /* ITLBW0TR 0-127 */
+        return env->tlb.itlb[openrisc_tlb_entry(0, idx)].mr;
+    case TO_SPR(2, 640) ... TO_SPR(2, 640 + TLB_SETS - 1): /* ITLBW0TR 0-127 */
         idx = spr - TO_SPR(2, 640);
-        return env->tlb.itlb[idx].tr;
-
-    case TO_SPR(2, 768) ... TO_SPR(2, 895):   /* ITLBW1MR 0-127 */
-    case TO_SPR(2, 896) ... TO_SPR(2, 1023):  /* ITLBW1TR 0-127 */
-    case TO_SPR(2, 1024) ... TO_SPR(2, 1151): /* ITLBW2MR 0-127 */
-    case TO_SPR(2, 1152) ... TO_SPR(2, 1279): /* ITLBW2TR 0-127 */
-    case TO_SPR(2, 1280) ... TO_SPR(2, 1407): /* ITLBW3MR 0-127 */
-    case TO_SPR(2, 1408) ... TO_SPR(2, 1535): /* ITLBW3TR 0-127 */
-        break;
+        return env->tlb.itlb[openrisc_tlb_entry(0, idx)].tr;
+    case TO_SPR(2, 768) ... TO_SPR(2, 768 + TLB_SETS - 1): /* ITLBW1MRn */
+        idx = spr - TO_SPR(2, 768);
+        return env->tlb.itlb[openrisc_tlb_entry(1, idx)].mr;
+    case TO_SPR(2, 896) ... TO_SPR(2, 896 + TLB_SETS - 1): /* ITLBW1TRn */
+        idx = spr - TO_SPR(2, 896);
+        return env->tlb.itlb[openrisc_tlb_entry(1, idx)].tr;
+    case TO_SPR(2, 1024) ... TO_SPR(2, 1024 + TLB_SETS - 1): /* ITLBW2MRn */
+        idx = spr - TO_SPR(2, 1024);
+        return env->tlb.itlb[openrisc_tlb_entry(2, idx)].mr;
+    case TO_SPR(2, 1152) ... TO_SPR(2, 1152 + TLB_SETS - 1): /* ITLBW2TRn */
+        idx = spr - TO_SPR(2, 1152);
+        return env->tlb.itlb[openrisc_tlb_entry(2, idx)].tr;
+    case TO_SPR(2, 1280) ... TO_SPR(2, 1280 + TLB_SETS - 1): /* ITLBW3MRn */
+        idx = spr - TO_SPR(2, 1280);
+        return env->tlb.itlb[openrisc_tlb_entry(3, idx)].mr;
+    case TO_SPR(2, 1408) ... TO_SPR(2, 1408 + TLB_SETS - 1): /* ITLBW3TRn */
+        idx = spr - TO_SPR(2, 1408);
+        return env->tlb.itlb[openrisc_tlb_entry(3, idx)].tr;
 
     case TO_SPR(5, 1):  /* MACLO */
         return (uint32_t)env->mac;

@@ -34,8 +34,8 @@ static const VMStateDescription vmstate_tlb_entry = {
 
 static const VMStateDescription vmstate_cpu_tlb = {
     .name = "cpu_tlb",
-    .version_id = 2,
-    .minimum_version_id = 2,
+    .version_id = 3,
+    .minimum_version_id = 3,
     .fields = (VMStateField[]) {
         VMSTATE_STRUCT_ARRAY(itlb, CPUOpenRISCTLBContext, TLB_SIZE, 0,
                              vmstate_tlb_entry, OpenRISCTLBEntry),
