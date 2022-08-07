@@ -83,6 +83,7 @@ void openrisc_cpu_do_interrupt(CPUState *cs)
             [EXCP_TRAP]     = "TRAP",
         };
 
+        qemu_plugin_vcpu_exception(cs, exception);
         qemu_log_mask(CPU_LOG_INT, "CPU: %d INT: %s\n",
                       cs->cpu_index,
                       int_name[exception]);
