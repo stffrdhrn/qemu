@@ -516,6 +516,14 @@ void
 qemu_plugin_register_vcpu_syscall_ret_cb(qemu_plugin_id_t id,
                                          qemu_plugin_vcpu_syscall_ret_cb_t cb);
 
+typedef void
+(*qemu_plugin_vcpu_exception_cb_t)(qemu_plugin_id_t id, unsigned int vcpu_idx,
+                                   int32_t idx);
+
+void
+qemu_plugin_register_vcpu_exception_cb(qemu_plugin_id_t id,
+                                       qemu_plugin_vcpu_exception_cb_t cb);
+
 
 /**
  * qemu_plugin_insn_disas() - return disassembly string for instruction

@@ -167,6 +167,13 @@ qemu_plugin_register_vcpu_syscall_ret_cb(qemu_plugin_id_t id,
     plugin_register_cb(id, QEMU_PLUGIN_EV_VCPU_SYSCALL_RET, cb);
 }
 
+void
+qemu_plugin_register_vcpu_exception_cb(qemu_plugin_id_t id,
+                                       qemu_plugin_vcpu_exception_cb_t cb)
+{
+    plugin_register_cb(id, QEMU_PLUGIN_EV_VCPU_EXCEPTION, cb);
+}
+
 /*
  * Plugin Queries
  *

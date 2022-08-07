@@ -390,6 +390,28 @@ void qemu_plugin_vcpu_syscall_ret(CPUState *cpu, int64_t num, int64_t ret)
     }
 }
 
+/*
+ * Disable CFI checks.
+ * The callback function has been loaded from an external library so we do not
+ * have type information
+ */
+QEMU_DISABLE_CFI
+void qemu_plugin_vcpu_exception(CPUState *cpu, int32_t idx)
+{
+    struct qemu_plugin_cb *cb, *next;
+    enum qemu_plugin_event ev = QEMU_PLUGIN_EV_VCPU_EXCEPTION;
+
+    if (!test_bit(ev, cpu->plugin_mask)) {
+        return;
+    }
+
+    QLIST_FOREACH_SAFE_RCU(cb, &plugin.cb_lists[ev], entry, next) {
+        qemu_plugin_vcpu_exception_cb_t func = cb->f.vcpu_exception;
+
+        func(cb->ctx->id, cpu->cpu_index, idx);
+    }
+}
+
 void qemu_plugin_vcpu_idle_cb(CPUState *cpu)
 {
     plugin_vcpu_cb__simple(cpu, QEMU_PLUGIN_EV_VCPU_IDLE);
