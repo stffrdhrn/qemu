@@ -1,5 +1,5 @@
 t = []
-foreach i : ['bb', 'empty', 'insn', 'mem', 'syscall', 'irqsampler']
+foreach i : ['bb', 'empty', 'insn', 'mem', 'syscall', 'irqsampler', 'memsampler']
   t += shared_module(i, files(i + '.c'),
                      include_directories: '../../include/qemu',
                      dependencies: glib)
